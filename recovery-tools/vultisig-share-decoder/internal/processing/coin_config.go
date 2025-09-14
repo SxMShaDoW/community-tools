@@ -287,6 +287,7 @@ func GetEnhancedEdDSACoins() []EnhancedCoinConfig {
                                 "encoding":  "base58",
                                 "network":   "mainnet",
                         },
+                        EdDSAHandler: SolanaEdDSAHandler,
                 },
                 {
                         Name:       "sui",
@@ -299,6 +300,7 @@ func GetEnhancedEdDSACoins() []EnhancedCoinConfig {
                                 "addressFormat": "0x-prefixed hex",
                                 "network":      "mainnet",
                         },
+                        EdDSAHandler: SuiEdDSAHandler,
                 },
                 {
                         Name:       "ton",
@@ -314,6 +316,7 @@ func GetEnhancedEdDSACoins() []EnhancedCoinConfig {
                                 "testnet":         false,
                                 "network":         "mainnet",
                         },
+                        EdDSAHandler: TonEdDSAHandler,
                 },
         }
 }

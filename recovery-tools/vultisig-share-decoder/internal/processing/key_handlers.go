@@ -365,3 +365,20 @@ func ShowTonKeyFromEdDSAJSON(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []
         return builder.Build(), nil
 }
 
+// EdDSA Handler Functions using proper EdDSACoinHandler signature
+
+// SolanaEdDSAHandler processes Solana keys using proper EdDSA cryptography
+func SolanaEdDSAHandler(privateKeyBytes, publicKeyBytes []byte, config EnhancedCoinConfig) (CoinKeyInfo, error) {
+        return ShowSolanaKeyFromEdDSAJSON(privateKeyBytes, publicKeyBytes, config.DerivePath)
+}
+
+// SuiEdDSAHandler processes Sui keys using proper EdDSA cryptography
+func SuiEdDSAHandler(privateKeyBytes, publicKeyBytes []byte, config EnhancedCoinConfig) (CoinKeyInfo, error) {
+        return ShowSuiKeyFromEdDSAJSON(privateKeyBytes, publicKeyBytes, config.DerivePath)
+}
+
+// TonEdDSAHandler processes TON keys using proper EdDSA cryptography
+func TonEdDSAHandler(privateKeyBytes, publicKeyBytes []byte, config EnhancedCoinConfig) (CoinKeyInfo, error) {
+        return ShowTonKeyFromEdDSAJSON(privateKeyBytes, publicKeyBytes, config.DerivePath)
+}
+

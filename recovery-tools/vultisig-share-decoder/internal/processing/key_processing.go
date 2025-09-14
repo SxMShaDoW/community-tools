@@ -254,27 +254,21 @@ func ProcessEdDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) ([]C
     publicKeyBytes := publicKey.Serialize()
     privateKeyBytes := privateKey.Serialize()
 
-    // Process EdDSA coins using the new JSON handlers
+    // Process EdDSA coins using the unified handler pattern
     eddsaCoins := GetEnhancedEdDSACoins()
     coinKeys := make([]CoinKeyInfo, 0, len(eddsaCoins))
 
     for _, coin := range eddsaCoins {
         log.Printf("Processing EdDSA coin: %s", coin.Name)
         
-        // Use the appropriate EdDSA JSON handler based on coin name
-        var coinInfo CoinKeyInfo
-        switch coin.Name {
-        case "solana":
-            coinInfo, err = ShowSolanaKeyFromEdDSAJSON(privateKeyBytes, publicKeyBytes, coin.DerivePath)
-        case "sui":
-            coinInfo, err = ShowSuiKeyFromEdDSAJSON(privateKeyBytes, publicKeyBytes, coin.DerivePath)
-        case "ton":
-            coinInfo, err = ShowTonKeyFromEdDSAJSON(privateKeyBytes, publicKeyBytes, coin.DerivePath)
-        default:
-            log.Printf("Unsupported EdDSA coin: %s", coin.Name)
+        // Check if the coin has an EdDSA handler
+        if coin.EdDSAHandler == nil {
+            log.Printf("No EdDSA handler found for coin: %s", coin.Name)
             continue
         }
         
+        // Use the EdDSA handler from the coin configuration
+        coinInfo, err := coin.EdDSAHandler(privateKeyBytes, publicKeyBytes, coin)
         if err != nil {
             log.Printf("Error processing EdDSA coin %s: %v", coin.Name, err)
             continue
