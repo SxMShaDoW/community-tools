@@ -13,6 +13,7 @@ import (
     // "github.com/btcsuite/btcutil/base58"
     "github.com/btcsuite/btcd/chaincfg"
     "github.com/decred/dcrd/dcrec/secp256k1/v4"
+    "main/internal/crypto"
     "main/internal/utils"
     edwards "github.com/decred/dcrd/dcrec/edwards/v2"
 
@@ -35,75 +36,84 @@ func validateThresholdAndSecrets(threshold int, allSecrets []utils.TempLocalStat
     return nil
 }
 
-// buildECDSAVSSShares constructs VSS shares from ECDSA local states with validation
-func buildECDSAVSSShares(threshold int, allSecrets []utils.TempLocalState) (vss.Shares, error) {
+// validateLocalStateExists performs common validation that LocalState is not nil
+func validateLocalStateExists(localState map[utils.TssKeyType]crypto.LocalState, secretIndex int) error {
+    if localState == nil {
+        return fmt.Errorf("localState is nil for secret %d", secretIndex)
+    }
+    return nil
+}
+
+// validateShareIDAndXi performs common validation of ShareID and Xi fields for both key types
+func validateShareIDAndXi(keyType utils.TssKeyType, state crypto.LocalState, secretIndex int) error {
+    var shareID, xi interface{}
+    
+    switch keyType {
+    case utils.ECDSA:
+        shareID = state.ECDSALocalData.ShareID
+        xi = state.ECDSALocalData.Xi
+    case utils.EdDSA:
+        shareID = state.EDDSALocalData.ShareID
+        xi = state.EDDSALocalData.Xi
+    default:
+        return fmt.Errorf("unsupported key type: %v", keyType)
+    }
+    
+    if shareID == nil {
+        return fmt.Errorf("ShareID is nil for secret %d", secretIndex)
+    }
+    if xi == nil {
+        return fmt.Errorf("Xi is nil for secret %d", secretIndex)
+    }
+    
+    return nil
+}
+
+// buildVSSShares constructs VSS shares from local states with validation for both ECDSA and EdDSA
+func buildVSSShares(keyType utils.TssKeyType, threshold int, allSecrets []utils.TempLocalState) (vss.Shares, error) {
+    keyTypeName := keyType.String()
     vssShares := make(vss.Shares, len(allSecrets))
     
     for i, s := range allSecrets {
-        // Check if LocalState exists
-        if s.LocalState == nil {
-            return nil, fmt.Errorf("localState is nil for secret %d", i)
+        // Check if LocalState exists using helper function
+        if err := validateLocalStateExists(s.LocalState, i); err != nil {
+            return nil, err
         }
-        // Check if ECDSA key exists
-        localState, exists := s.LocalState[utils.ECDSA]
+        
+        // Check if the specific key type exists
+        localState, exists := s.LocalState[keyType]
         if !exists {
-            return nil, fmt.Errorf("ECDSA key not found in secret %d", i)
+            return nil, fmt.Errorf("%s key not found in secret %d", keyTypeName, i)
         }
 
-        // Validate ShareID and Xi
-        if localState.ECDSALocalData.ShareID == nil {
-            return nil, fmt.Errorf("ShareID is nil for secret %d", i)
+        // Validate ShareID and Xi using helper function
+        if err := validateShareIDAndXi(keyType, localState, i); err != nil {
+            return nil, err
         }
-        if localState.ECDSALocalData.Xi == nil {
-            return nil, fmt.Errorf("Xi is nil for secret %d", i)
+        
+        // Extract ShareID and Xi based on key type with proper type assertion
+        var shareID, xi *big.Int
+        switch keyType {
+        case utils.ECDSA:
+            shareID = localState.ECDSALocalData.ShareID
+            xi = localState.ECDSALocalData.Xi
+        case utils.EdDSA:
+            shareID = localState.EDDSALocalData.ShareID
+            xi = localState.EDDSALocalData.Xi
         }
         
         share := vss.Share{
             Threshold: threshold,
-            ID:        localState.ECDSALocalData.ShareID,
-            Share:     localState.ECDSALocalData.Xi,
+            ID:        shareID,
+            Share:     xi,
         }
         vssShares[i] = &share
     }
     
-    log.Printf("Created %d ECDSA vssShares", len(vssShares))
+    log.Printf("Created %d %s vssShares", len(vssShares), keyTypeName)
     return vssShares, nil
 }
 
-// buildEdDSAVSSShares constructs VSS shares from EdDSA local states with validation
-func buildEdDSAVSSShares(threshold int, allSecrets []utils.TempLocalState) (vss.Shares, error) {
-    vssShares := make(vss.Shares, len(allSecrets))
-    
-    for i, s := range allSecrets {
-        // Check if LocalState exists
-        if s.LocalState == nil {
-            return nil, fmt.Errorf("localState is nil for secret %d", i)
-        }
-        // Check if EdDSA key exists
-        eddsaState, exists := s.LocalState[utils.EdDSA]
-        if !exists {
-            return nil, fmt.Errorf("EdDSA key not found in secret %d", i)
-        }
-
-        // Validate ShareID and Xi
-        if eddsaState.EDDSALocalData.ShareID == nil {
-            return nil, fmt.Errorf("ShareID is nil for secret %d", i)
-        }
-        if eddsaState.EDDSALocalData.Xi == nil {
-            return nil, fmt.Errorf("Xi is nil for secret %d", i)
-        }
-        
-        share := vss.Share{
-            Threshold: threshold,
-            ID:        eddsaState.EDDSALocalData.ShareID,
-            Share:     eddsaState.EDDSALocalData.Xi,
-        }
-        vssShares[i] = &share
-    }
-    
-    log.Printf("Created %d EdDSA vssShares", len(vssShares))
-    return vssShares, nil
-}
 
 // CurveType represents the type of cryptographic curve to use for TSS key reconstruction
 type CurveType int
@@ -152,8 +162,8 @@ func ProcessECDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) (*Ro
         return nil, nil, err
     }
 
-    // Build VSS shares using helper function
-    vssShares, err := buildECDSAVSSShares(threshold, allSecrets)
+    // Build VSS shares using unified helper function
+    vssShares, err := buildVSSShares(utils.ECDSA, threshold, allSecrets)
     if err != nil {
         return nil, nil, err
     }
@@ -233,8 +243,8 @@ func ProcessEdDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) ([]C
         return nil, err
     }
     
-    // Build VSS shares using helper function
-    vssShares, err := buildEdDSAVSSShares(threshold, allSecrets)
+    // Build VSS shares using unified helper function
+    vssShares, err := buildVSSShares(utils.EdDSA, threshold, allSecrets)
     if err != nil {
         return nil, err
     }
