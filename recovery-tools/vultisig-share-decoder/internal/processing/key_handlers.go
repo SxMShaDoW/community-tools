@@ -45,6 +45,10 @@ func GetDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.Extende
         return key, nil
 }
 
+// ShowEthereumKey displays Ethereum key information using string output.
+//
+// Deprecated: Use ShowEthereumKeyJSON() for structured data. This function is
+// maintained only for backward compatibility and coin_config.go integration.
 func ShowEthereumKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
         nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
         if err != nil {
@@ -61,6 +65,10 @@ func ShowEthereumKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *
         return nil
 }
 
+// ShowBitcoinKey displays Bitcoin key information using string output.
+//
+// Deprecated: Use ShowBitcoinKeyJSON() for structured data. This function is
+// maintained only for backward compatibility and coin_config.go integration.
 func ShowBitcoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
         net := &chaincfg.MainNetParams
         fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for bitcoin:%s\n", extendedPrivateKey.String())
@@ -87,6 +95,10 @@ func ShowBitcoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *s
         return nil
 }
 
+// ShowBitcoinCashKey displays Bitcoin Cash key information using string output.
+//
+// Deprecated: Use ShowBitcoinCashKeyJSON() for structured data. This function is
+// maintained only for backward compatibility and coin_config.go integration.
 func ShowBitcoinCashKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
         net := &bchChainCfg.MainNetParams
         fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for bitcoinCash:%s\n", extendedPrivateKey.String())
@@ -114,6 +126,10 @@ func ShowBitcoinCashKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilde
         return nil
 }
 
+// ShowDogecoinKey displays Dogecoin key information using string output.
+//
+// Deprecated: Use ShowDogecoinKeyJSON() for structured data. This function is
+// maintained only for backward compatibility and coin_config.go integration.
 func ShowDogecoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
         net := &dogechaincfg.MainNetParams
         fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for dogecoin:%s\n", extendedPrivateKey.String())
@@ -141,6 +157,10 @@ func ShowDogecoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *
         return nil
 }
 
+// ShowLitecoinKey displays Litecoin key information using string output.
+//
+// Deprecated: Use ShowLitecoinKeyJSON() for structured data. This function is
+// maintained only for backward compatibility and coin_config.go integration.
 func ShowLitecoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
         net := &ltcchaincfg.MainNetParams
         fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for litcoin:%s", extendedPrivateKey.String())
@@ -167,6 +187,10 @@ func ShowLitecoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *
         return nil
 }
 
+// CosmosLikeKeyHandler displays Cosmos-like blockchain key information using string output.
+//
+// Deprecated: Use CosmosLikeKeyHandlerJSON() for structured data. This function is
+// maintained only for backward compatibility and coin_config.go integration.
 func CosmosLikeKeyHandler(extendedPrivateKey *hdkeychain.ExtendedKey, bech32PrefixAcc string, bech32PrefixVal string, bech32PrefixNode string, outputBuilder *strings.Builder, coinName string) error {
         fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for %s:%s\n", coinName, extendedPrivateKey.String())
 
@@ -196,58 +220,6 @@ func CosmosLikeKeyHandler(extendedPrivateKey *hdkeychain.ExtendedKey, bech32Pref
         return nil
 }
 
-func ShowThorchainKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
-
-        fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for THORChain:%s\n", extendedPrivateKey.String())
-        nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-        if err != nil {
-                return err
-        }
-        nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-        if err != nil {
-                return err
-        }
-
-        fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened private key for THORChain:%s\n", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-        fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for THORChain:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-        config := sdk.GetConfig()
-        config.SetBech32PrefixForAccount("thor", "thorpub")
-        config.SetBech32PrefixForValidator("thorv", "thorvpub")
-        config.SetBech32PrefixForConsensusNode("thorc", "thorcpub")
-
-        compressedPubkey := coskey.PubKey{
-                Key: nonHardenedPubKey.SerializeCompressed(),
-        }
-        addr := types.AccAddress(compressedPubkey.Address().Bytes())
-        fmt.Fprintf(outputBuilder, "address:%s", addr.String())
-        return nil
-}
-
-func ShowMayachainKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
-        fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for MAYAChain:%s\n", extendedPrivateKey.String())
-        nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-        if err != nil {
-                return err
-        }
-        nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-        if err != nil {
-                return err
-        }
-
-        fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened private key for MAYAChain:%s\n", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-        fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for MAYAChain:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-        config := sdk.GetConfig()
-        config.SetBech32PrefixForAccount("maya", "mayapub")
-        config.SetBech32PrefixForValidator("mayav", "mayavpub")
-        config.SetBech32PrefixForConsensusNode("mayac", "mayacpub")
-
-        compressedPubkey := coskey.PubKey{
-                Key: nonHardenedPubKey.SerializeCompressed(),
-        }
-        addr := types.AccAddress(compressedPubkey.Address().Bytes())
-        fmt.Fprintf(outputBuilder, "\naddress:%s\n", addr.String())
-        return nil
-}
 
 // ProcessRootKeyForCoins processes root key material through the coin handlers
 func ProcessRootKeyForCoins(rootPrivateKeyBytes []byte, rootChainCodeBytes []byte, coinConfigs []CoinConfig, outputBuilder *strings.Builder) error {

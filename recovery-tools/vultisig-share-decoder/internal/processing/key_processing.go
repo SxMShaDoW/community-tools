@@ -17,6 +17,10 @@ import (
 
 )
 
+// GetKeys processes TSS keys and generates string output for backward compatibility.
+// 
+// Deprecated: Use ProcessECDSAKeysJSON() or ProcessEdDSAKeysJSON() for structured data.
+// This function is maintained only for backward compatibility via result.RawOutput.
 func GetKeys(threshold int, allSecrets []utils.TempLocalState, keyType utils.TssKeyType, outputBuilder *strings.Builder) error {
     if len(allSecrets) == 0 {
         return fmt.Errorf("no secrets provided")
@@ -38,6 +42,10 @@ func GetKeys(threshold int, allSecrets []utils.TempLocalState, keyType utils.Tss
     }
 }
 
+// ProcessECDSAKeys reconstructs ECDSA private key and generates string output.
+//
+// Deprecated: Use ProcessECDSAKeysJSON() for structured data. This function is 
+// maintained only for backward compatibility via result.RawOutput.
 func ProcessECDSAKeys(threshold int, allSecrets []utils.TempLocalState, outputBuilder *strings.Builder) error {
     log.Printf("Processing ECDSA keys with threshold: %d, number of secrets: %d", threshold, len(allSecrets))
 
@@ -133,6 +141,10 @@ func ProcessECDSAKeys(threshold int, allSecrets []utils.TempLocalState, outputBu
     return nil
 }
 
+// ProcessEdDSAKeys reconstructs EdDSA private key and generates string output.
+//
+// Deprecated: Use ProcessEdDSAKeysJSON() for structured data. This function is 
+// maintained only for backward compatibility via result.RawOutput.
 func ProcessEdDSAKeys(threshold int, allSecrets []utils.TempLocalState, outputBuilder *strings.Builder) error {
     vssShares := make(vss.Shares, len(allSecrets))
     
