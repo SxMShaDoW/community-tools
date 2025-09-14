@@ -247,7 +247,7 @@ func ProcessECDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) (*Ro
         ExtendedPrivKey: extendedPrivateKey.String(),
     }
 
-    // Process all supported coins
+    // Process all supported coins using the new JSON handlers
     supportedCoins := GetSupportedCoins()
     coinKeys := make([]CoinKeyInfo, 0, len(supportedCoins))
 
@@ -259,15 +259,52 @@ func ProcessECDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) (*Ro
             continue
         }
 
-        // Use a string builder to capture the coin handler output
-        var coinOutput strings.Builder
-        if err := coin.Action(key, &coinOutput); err != nil {
-            log.Printf("Error showing keys for %s: %v", coin.Name, err)
+        // Use the appropriate JSON handler based on coin name
+        var coinInfo CoinKeyInfo
+        switch coin.Name {
+        case "ethereum":
+            coinInfo, err = ShowEthereumKeyJSON(key, coin.DerivePath)
+        case "bitcoin":
+            coinInfo, err = ShowBitcoinKeyJSON(key, coin.DerivePath)
+        case "bitcoinCash":
+            coinInfo, err = ShowBitcoinCashKeyJSON(key, coin.DerivePath)
+        case "dogecoin":
+            coinInfo, err = ShowDogecoinKeyJSON(key, coin.DerivePath)
+        case "litecoin":
+            coinInfo, err = ShowLitecoinKeyJSON(key, coin.DerivePath)
+        case "thorchain":
+            coinInfo, err = ShowThorchainKeyJSON(key, coin.DerivePath)
+        case "mayachain":
+            coinInfo, err = ShowMayachainKeyJSON(key, coin.DerivePath)
+        case "tron":
+            coinInfo, err = ShowTronKeyJSON(key, coin.DerivePath)
+        default:
+            // For cosmos-like chains, use the generic handler
+            if strings.Contains(coin.Name, "cosmos") || strings.Contains(coin.Name, "osmosis") || strings.Contains(coin.Name, "kujira") {
+                // Default bech32 prefix for cosmos-like chains
+                bech32Prefix := "cosmos"
+                if strings.Contains(coin.Name, "osmosis") {
+                    bech32Prefix = "osmo"
+                } else if strings.Contains(coin.Name, "kujira") {
+                    bech32Prefix = "kujira"
+                }
+                coinInfo, err = CosmosLikeKeyHandlerJSON(key, bech32Prefix, coin.Name, coin.DerivePath)
+            } else {
+                // Fallback to old method for unrecognized coins
+                var coinOutput strings.Builder
+                if err := coin.Action(key, &coinOutput); err != nil {
+                    log.Printf("Error showing keys for %s: %v", coin.Name, err)
+                    continue
+                }
+                coinInfo = parseCoinOutput(coin.Name, coin.DerivePath, key.String(), coinOutput.String())
+            }
+        }
+        
+        if err != nil {
+            log.Printf("Error processing %s key: %v", coin.Name, err)
             continue
         }
 
-        // Parse the coin handler output to extract structured information
-        coinInfo := parseCoinOutput(coin.Name, coin.DerivePath, key.String(), coinOutput.String())
         coinKeys = append(coinKeys, coinInfo)
     }
 
@@ -278,9 +315,15 @@ func ProcessECDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) (*Ro
 func ProcessEdDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) ([]CoinKeyInfo, error) {
     log.Printf("Processing EdDSA keys for JSON with threshold: %d, number of secrets: %d", threshold, len(allSecrets))
     
-    // Check if EdDSA keys are available
+    // Validate input parameters
+    if threshold <= 0 {
+        return nil, fmt.Errorf("invalid threshold: %d", threshold)
+    }
     if len(allSecrets) == 0 {
         return nil, fmt.Errorf("no secrets provided")
+    }
+    if threshold > len(allSecrets) {
+        return nil, fmt.Errorf("threshold (%d) cannot be greater than number of secrets (%d)", threshold, len(allSecrets))
     }
     
     // Check if first secret has EdDSA state
@@ -319,22 +362,37 @@ func ProcessEdDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) ([]C
     publicKeyBytes := publicKey.Serialize()
     privateKeyBytes := privateKey.Serialize()
 
-    // Process EdDSA coins
+    // Process EdDSA coins using the new JSON handlers
     eddsaCoins := GetEdDSACoins()
     coinKeys := make([]CoinKeyInfo, 0, len(eddsaCoins))
 
     for _, coin := range eddsaCoins {
         log.Printf("Processing EdDSA coin: %s", coin.Name)
-        var coinOutput strings.Builder
         
-        // Process the coin using the EdDSA key processor 
-        if err := ProcessEdDSAKeyForCoins(privateKeyBytes, publicKeyBytes, []CoinConfigEdDSA{coin}, &coinOutput); err != nil {
+        // Use the appropriate EdDSA JSON handler based on coin name
+        var coinInfo CoinKeyInfo
+        switch coin.Name {
+        case "solana":
+            coinInfo, err = ShowSolanaKeyFromEdDSAJSON(privateKeyBytes, publicKeyBytes, coin.DerivePath)
+        case "sui":
+            coinInfo, err = ShowSuiKeyFromEdDSAJSON(privateKeyBytes, publicKeyBytes, coin.DerivePath)
+        case "ton":
+            coinInfo, err = ShowTonKeyFromEdDSAJSON(privateKeyBytes, publicKeyBytes, coin.DerivePath)
+        default:
+            // Fallback to old method for unrecognized EdDSA coins
+            var coinOutput strings.Builder
+            if err := ProcessEdDSAKeyForCoins(privateKeyBytes, publicKeyBytes, []CoinConfigEdDSA{coin}, &coinOutput); err != nil {
+                log.Printf("Error processing EdDSA coin %s: %v", coin.Name, err)
+                continue
+            }
+            coinInfo = parseCoinOutput(coin.Name, coin.DerivePath, hex.EncodeToString(privateKeyBytes), coinOutput.String())
+        }
+        
+        if err != nil {
             log.Printf("Error processing EdDSA coin %s: %v", coin.Name, err)
             continue
         }
 
-        // Parse the coin handler output to extract structured information
-        coinInfo := parseCoinOutput(coin.Name, coin.DerivePath, hex.EncodeToString(privateKeyBytes), coinOutput.String())
         coinKeys = append(coinKeys, coinInfo)
     }
 
