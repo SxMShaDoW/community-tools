@@ -28,6 +28,46 @@ import (
         "github.com/tonkeeper/tongo/wallet"
 )
 
+// Custom network parameters for Dash mainnet
+var DashMainNetParams = chaincfg.Params{
+        Name:             "mainnet",
+        Net:              0xd9b4bef9, // Dash mainnet magic number
+        DefaultPort:      "9999",
+        DNSSeeds:         []chaincfg.DNSSeed{},
+        
+        // Address encoding magics
+        PubKeyHashAddrID: 76,  // Dash addresses start with 'X'
+        ScriptHashAddrID: 16,  // P2SH addresses start with '7'
+        PrivateKeyID:     204, // WIF private keys start with 'X'
+        
+        // BIP32 hierarchical deterministic extended key magics
+        HDPrivateKeyID: [4]byte{0x02, 0xfe, 0x52, 0xf8}, // starts with xprv
+        HDPublicKeyID:  [4]byte{0x02, 0xfe, 0x52, 0xcc}, // starts with xpub
+        
+        // BIP44 coin type
+        HDCoinType: 5,
+}
+
+// Custom network parameters for Zcash mainnet (transparent addresses)
+var ZcashMainNetParams = chaincfg.Params{
+        Name:             "mainnet", 
+        Net:              0x24e92764, // Zcash mainnet magic number
+        DefaultPort:      "8233",
+        DNSSeeds:         []chaincfg.DNSSeed{},
+        
+        // Address encoding magics for transparent addresses
+        PubKeyHashAddrID: 0x1C, // Transparent addresses start with 't1' (28 decimal)
+        ScriptHashAddrID: 0x1C, // P2SH addresses
+        PrivateKeyID:     0x80, // WIF private keys
+        
+        // BIP32 hierarchical deterministic extended key magics
+        HDPrivateKeyID: [4]byte{0x04, 0x88, 0xad, 0xe4}, // starts with xprv
+        HDPublicKeyID:  [4]byte{0x04, 0x88, 0xb2, 0x1e}, // starts with xpub
+        
+        // BIP44 coin type
+        HDCoinType: 133,
+}
+
 func GetDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
         pathBuf, err := crypto.GetDerivePathBytes(derivePath)
         if err != nil {
@@ -65,6 +105,10 @@ func UTXOHandler(extendedKey *hdkeychain.ExtendedKey, config EnhancedCoinConfig)
                 return processDogecoin(builder, keyPair)
         case "litecoin":
                 return processLitecoin(builder, keyPair)
+        case "dash":
+                return processDash(builder, keyPair)
+        case "zcash":
+                return processZcash(builder, keyPair)
         default:
                 return builder.Build(), fmt.Errorf("unsupported UTXO coin: %s", config.Name)
         }
@@ -149,6 +193,48 @@ func processLitecoin(builder *CoinKeyBuilder, keyPair *ECKeyPair) (CoinKeyInfo, 
 
         builder.SetAddress(addressPubKey.EncodeAddress())
         builder.SetWIFPrivateKey(wif.String())
+        
+        return builder.Build(), nil
+}
+
+// processDash handles Dash-specific address and WIF generation
+func processDash(builder *CoinKeyBuilder, keyPair *ECKeyPair) (CoinKeyInfo, error) {
+        net := &DashMainNetParams
+        
+        wif, err := btcutil.NewWIF(keyPair.PrivateKey, net, true)
+        if err != nil {
+                return builder.Build(), err
+        }
+
+        addressPubKey, err := btcutil.NewAddressPubKeyHash(btcutil.Hash160(keyPair.PublicKey.SerializeCompressed()), net)
+        if err != nil {
+                return builder.Build(), err
+        }
+
+        builder.SetAddress(addressPubKey.EncodeAddress())
+        builder.SetWIFPrivateKey(wif.String())
+        builder.SetAdditionalInfo("p2pkh")
+        
+        return builder.Build(), nil
+}
+
+// processZcash handles Zcash transparent address and WIF generation
+func processZcash(builder *CoinKeyBuilder, keyPair *ECKeyPair) (CoinKeyInfo, error) {
+        net := &ZcashMainNetParams
+        
+        wif, err := btcutil.NewWIF(keyPair.PrivateKey, net, true)
+        if err != nil {
+                return builder.Build(), err
+        }
+
+        addressPubKey, err := btcutil.NewAddressPubKeyHash(btcutil.Hash160(keyPair.PublicKey.SerializeCompressed()), net)
+        if err != nil {
+                return builder.Build(), err
+        }
+
+        builder.SetAddress(addressPubKey.EncodeAddress())
+        builder.SetWIFPrivateKey(wif.String())
+        builder.SetAdditionalInfo("p2pkh")
         
         return builder.Build(), nil
 }

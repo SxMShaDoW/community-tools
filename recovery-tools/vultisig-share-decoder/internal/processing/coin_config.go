@@ -170,6 +170,28 @@ func GetEnhancedECDSACoins() []EnhancedCoinConfig {
                         },
                         Handler:    UTXOHandler,
                 },
+                {
+                        Name:       "dash",
+                        DerivePath: "m/44'/5'/0'/0/0",
+                        Family:     FamilyUTXO,
+                        Params: CoinParams{
+                                "addressType": "p2pkh",
+                                "network":     "mainnet",
+                                "compressed":  true,
+                        },
+                        Handler:    UTXOHandler,
+                },
+                {
+                        Name:       "zcash",
+                        DerivePath: "m/44'/133'/0'/0/0",
+                        Family:     FamilyUTXO,
+                        Params: CoinParams{
+                                "addressType": "p2pkh",
+                                "network":     "mainnet",
+                                "compressed":  true,
+                        },
+                        Handler:    UTXOHandler,
+                },
                 // Cosmos Family
                 {
                         Name:       "thorchain",
