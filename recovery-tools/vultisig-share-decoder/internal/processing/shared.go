@@ -16,103 +16,90 @@ import (
         "encoding/json"
 )
 
+// Unified File Processing Pipeline Types and Functions
 
-// decodeAndParseVaultContainer consolidates the base64 decode and VaultContainer parsing logic.
-// Returns the decoded data and parsed VaultContainer, or error if parsing fails.
-func decodeAndParseVaultContainer(fileContent []byte) ([]byte, *v1.VaultContainer, error) {
-        contentStr := strings.TrimSpace(string(fileContent))
+// FileProcessingContext represents the shared context passed through the processing pipeline
+type FileProcessingContext struct {
+        FileInfos       []utils.FileInfo
+        Passwords       []string
+        Source          utils.InputSource
         
-        // Try to decode as base64 first
-        decodedData, err := base64.StdEncoding.DecodeString(contentStr)
-        if err != nil {
-                log.Printf("Content is not base64 encoded, using raw data")
-                decodedData = fileContent
-        } else {
-                log.Printf("Successfully decoded from base64")
-        }
-
-        // Try to parse as protobuf VaultContainer
-        var vaultContainer v1.VaultContainer
-        if err := proto.Unmarshal(decodedData, &vaultContainer); err != nil {
-                return decodedData, nil, err
-        }
-        
-        return decodedData, &vaultContainer, nil
+        // DKLS-specific fields
+        PrivateKeyHex    string
+        RootChainCodeHex string
+        EdDSAPublicKeyHex string
 }
 
-// decodeAndExtractLocalState consolidates the file parsing logic that was duplicated across functions.
-// It handles base64 decoding, protobuf parsing, GG20/DKLS detection, and returns structured results.
-func decodeAndExtractLocalState(fileContent []byte, password string, source utils.InputSource) (map[utils.TssKeyType]crypto.LocalState, bool, error) {
-        contentStr := strings.TrimSpace(string(fileContent))
-        
-        decodedData, _, err := decodeAndParseVaultContainer(fileContent)
-        if err != nil {
-                log.Printf("Failed to unmarshal as protobuf VaultContainer: %v", err)
-                // Fallback to direct local state parsing (GG20 format)
-                localStates, err := utils.GetLocalStateFromContent(decodedData)
-                if err != nil {
-                        // Check if this error indicates a DKLS vault
-                        if strings.Contains(err.Error(), "DKLS vault detected") {
-                                log.Printf("DKLS vault detected during content parsing")
-                                return nil, true, fmt.Errorf("DKLS vault detected: %w", err)
-                        }
-                        return nil, false, fmt.Errorf("error parsing content: %w", err)
-                }
-                return localStates, false, nil
-        } else {
-                log.Printf("Successfully unmarshalled as protobuf VaultContainer")
-                // Parse using VaultContainer method (encrypted vault format)
-                localStates, err := utils.GetLocalStateFromBakContent([]byte(contentStr), password, source)
-                if err != nil {
-                        // Check if this error indicates a DKLS vault
-                        if strings.Contains(err.Error(), "DKLS vault detected") {
-                                log.Printf("DKLS vault detected during vault container parsing")
-                                return nil, true, fmt.Errorf("DKLS vault detected: %w", err)
-                        }
-                        return nil, false, fmt.Errorf("error processing vault container: %w", err)
-                }
-                return localStates, false, nil
-        }
+// FileProcessingStrategy defines the interface for different vault processing strategies
+type FileProcessingStrategy interface {
+        ProcessFiles(ctx FileProcessingContext, result *ProcessResult) error
+        GetStrategyName() string
 }
 
-// ProcessFileContentJSON processes files and returns structured JSON data
-func ProcessFileContentJSON(fileInfos []utils.FileInfo, passwords []string, source utils.InputSource) (ProcessResult, error) {
-        result := ProcessResult{
+// FileProcessingConfig configures the unified processing pipeline
+type FileProcessingConfig struct {
+        StrategyName string
+        Strategy     FileProcessingStrategy
+}
+
+// Common Validation Functions
+
+// validateFileProcessingInput performs common validation of input parameters
+func validateFileProcessingInput(fileInfos []utils.FileInfo) error {
+        if len(fileInfos) == 0 {
+                return fmt.Errorf("no files provided")
+        }
+        return nil
+}
+
+// initializeProcessingResult creates and initializes a ProcessResult with common setup
+func initializeProcessingResult() ProcessResult {
+        return ProcessResult{
                 Success: true,
                 ShareDetails: make([]ShareDetails, 0),
                 CoinKeys: make([]CoinKeyInfo, 0),
         }
+}
 
+// setupLogging configures logging output based on environment variable
+func setupLogging() {
         if os.Getenv("ENABLE_LOGGING") != "true" {
                 log.SetOutput(io.Discard)
         }
+}
 
-        if len(fileInfos) == 0 {
-                result.Success = false
-                result.Error = "no files provided"
-                return result, fmt.Errorf("no files provided")
-        }
-        
-        allSecret := make([]utils.TempLocalState, 0, len(fileInfos))
+// GG20Strategy implements FileProcessingStrategy for GG20 vault processing
+type GG20Strategy struct{}
+
+func (s *GG20Strategy) GetStrategyName() string {
+        return "GG20"
+}
+
+func (s *GG20Strategy) ProcessFiles(ctx FileProcessingContext, result *ProcessResult) error {
+        allSecret := make([]utils.TempLocalState, 0, len(ctx.FileInfos))
 
         // Process each file
-        for i, file := range fileInfos {
-                log.Printf("Processing file %d, content starts with: %s", i, string(file.Content)[:min(len(file.Content), 50)])
+        for i, file := range ctx.FileInfos {
+                log.Printf("Processing GG20 file %d, content starts with: %s", i, string(file.Content)[:min(len(file.Content), 50)])
 
                 password := ""
-                if i < len(passwords) {
-                        password = passwords[i]
+                if i < len(ctx.Passwords) {
+                        password = ctx.Passwords[i]
                 }
 
-                localStates, isDKLS, err := decodeAndExtractLocalState(file.Content, password, source)
+                localStates, isDKLS, err := decodeAndExtractLocalState(file.Content, password, ctx.Source)
                 if err != nil {
                         if isDKLS {
-                                log.Printf("File %d detected as DKLS format, skipping GG20 processing", i)
+                                log.Printf("Warning: File %d (%s) is a DKLS vault and cannot be processed as GG20. Use DKLS processing mode for this file type.", i, file.Name)
+                                // Set warning in result but continue processing other files
+                                if result.Error == "" {
+                                        result.Error = fmt.Sprintf("Warning: Some files are DKLS format and were skipped in GG20 processing (e.g., %s)", file.Name)
+                                }
                                 continue // Skip this file for GG20 processing
                         }
                         result.Success = false
                         result.Error = fmt.Sprintf("error processing file %d: %v", i, err)
-                        return result, fmt.Errorf("error processing file %d: %w", i, err)
+                        return fmt.Errorf("error processing file %d: %w", i, err)
                 }
 
                 // Add share details to result
@@ -142,7 +129,7 @@ func ProcessFileContentJSON(fileInfos []utils.FileInfo, passwords []string, sour
                 if err != nil {
                         result.Success = false
                         result.Error = fmt.Sprintf("error processing ECDSA keys: %v", err)
-                        return result, fmt.Errorf("error processing ECDSA keys: %w", err)
+                        return fmt.Errorf("error processing ECDSA keys: %w", err)
                 }
                 
                 // Set the structured data
@@ -151,7 +138,6 @@ func ProcessFileContentJSON(fileInfos []utils.FileInfo, passwords []string, sour
                         result.PublicKeys.ECDSA = rootKeyInfo.HexPubKeyECDSA
                 }
                 result.CoinKeys = append(result.CoinKeys, coinKeys...)
-                
         }
 
         // Process EdDSA keys with proper structuring
@@ -170,40 +156,28 @@ func ProcessFileContentJSON(fileInfos []utils.FileInfo, passwords []string, sour
                                 }
                         }
                 }
-                
         }
 
-        return result, nil
+        return nil
 }
 
-// ProcessDKLSFileContentJSON processes DKLS vault files and returns structured JSON data in the same format as GG20
-func ProcessDKLSFileContentJSON(fileInfos []utils.FileInfo, passwords []string, privateKeyHex, rootChainCodeHex, eddsaPublicKeyHex string) (ProcessResult, error) {
-        result := ProcessResult{
-                Success: true,
-                ShareDetails: make([]ShareDetails, 0),
-                CoinKeys: make([]CoinKeyInfo, 0),
-        }
+// DKLSStrategy implements FileProcessingStrategy for DKLS vault processing
+type DKLSStrategy struct{}
 
-        if os.Getenv("ENABLE_LOGGING") != "true" {
-                log.SetOutput(io.Discard)
-        }
+func (s *DKLSStrategy) GetStrategyName() string {
+        return "DKLS"
+}
 
-        if len(fileInfos) == 0 {
-                result.Success = false
-                result.Error = "no files provided"
-                return result, fmt.Errorf("no files provided")
-        }
-
+func (s *DKLSStrategy) ProcessFiles(ctx FileProcessingContext, result *ProcessResult) error {
         // Process each file to extract vault information for ShareDetails
-        for i, file := range fileInfos {
+        for i, file := range ctx.FileInfos {
                 contentStr := strings.TrimSpace(string(file.Content))
                 log.Printf("Processing DKLS file %d, content starts with: %s", i, contentStr[:min(len(contentStr), 50)])
 
                 password := ""
-                if i < len(passwords) {
-                        password = passwords[i]
+                if i < len(ctx.Passwords) {
+                        password = ctx.Passwords[i]
                 }
-                _ = password // TODO: Use password for vault decryption in future implementation
 
                 // Use consolidated parsing function for DKLS files
                 _, vaultContainer, err := decodeAndParseVaultContainer(file.Content)
@@ -213,10 +187,10 @@ func ProcessDKLSFileContentJSON(fileInfos []utils.FileInfo, passwords []string, 
                         shareDetail := ShareDetails{
                                 BackupName: file.Name,
                                 ThisShare:  fmt.Sprintf("party%d", i+1),
-                                AllShares:  make([]string, len(fileInfos)),
+                                AllShares:  make([]string, len(ctx.FileInfos)),
                         }
                         
-                        for j := 0; j < len(fileInfos); j++ {
+                        for j := 0; j < len(ctx.FileInfos); j++ {
                                 shareDetail.AllShares[j] = fmt.Sprintf("party%d", j+1)
                         }
                         
@@ -226,20 +200,87 @@ func ProcessDKLSFileContentJSON(fileInfos []utils.FileInfo, passwords []string, 
 
                 // Parse the inner vault to get vault information
                 if vaultContainer.IsEncrypted {
-                        // For encrypted vaults, we can't easily extract vault info without password
-                        // Use filename and generate party ID
-                        shareDetail := ShareDetails{
-                                BackupName: file.Name,
-                                ThisShare:  fmt.Sprintf("party%d", i+1),
-                                AllShares:  make([]string, len(fileInfos)),
+                        if password == "" {
+                                // No password provided for encrypted vault
+                                log.Printf("Encrypted vault requires password for file %d", i)
+                                shareDetail := ShareDetails{
+                                        BackupName: file.Name,
+                                        ThisShare:  fmt.Sprintf("party%d", i+1),
+                                        AllShares:  make([]string, len(ctx.FileInfos)),
+                                }
+                                
+                                for j := 0; j < len(ctx.FileInfos); j++ {
+                                        shareDetail.AllShares[j] = fmt.Sprintf("party%d", j+1)
+                                }
+                                
+                                result.ShareDetails = append(result.ShareDetails, shareDetail)
+                        } else {
+                                // Decrypt the vault to extract ShareDetails
+                                vaultBytes, err := base64.StdEncoding.DecodeString(vaultContainer.Vault)
+                                if err != nil {
+                                        log.Printf("Failed to decode encrypted vault data for file %d: %v", i, err)
+                                        shareDetail := ShareDetails{
+                                                BackupName: file.Name,
+                                                ThisShare:  fmt.Sprintf("party%d", i+1),
+                                                AllShares:  make([]string, len(ctx.FileInfos)),
+                                        }
+                                        
+                                        for j := 0; j < len(ctx.FileInfos); j++ {
+                                                shareDetail.AllShares[j] = fmt.Sprintf("party%d", j+1)
+                                        }
+                                        
+                                        result.ShareDetails = append(result.ShareDetails, shareDetail)
+                                } else {
+                                        // Decrypt the vault bytes using the password
+                                        decryptedData, err := utils.DecryptWithPassword(vaultBytes, password)
+                                        if err != nil {
+                                                log.Printf("Failed to decrypt vault for file %d: %v", i, err)
+                                                shareDetail := ShareDetails{
+                                                        BackupName: file.Name,
+                                                        ThisShare:  fmt.Sprintf("party%d", i+1),
+                                                        AllShares:  make([]string, len(ctx.FileInfos)),
+                                                }
+                                                
+                                                for j := 0; j < len(ctx.FileInfos); j++ {
+                                                        shareDetail.AllShares[j] = fmt.Sprintf("party%d", j+1)
+                                                }
+                                                
+                                                result.ShareDetails = append(result.ShareDetails, shareDetail)
+                                        } else {
+                                                // Parse the decrypted vault to extract proper ShareDetails
+                                                var vault v1.Vault
+                                                if err := proto.Unmarshal(decryptedData, &vault); err != nil {
+                                                        log.Printf("Failed to unmarshal decrypted vault for file %d: %v", i, err)
+                                                        shareDetail := ShareDetails{
+                                                                BackupName: file.Name,
+                                                                ThisShare:  fmt.Sprintf("party%d", i+1),
+                                                                AllShares:  make([]string, len(ctx.FileInfos)),
+                                                        }
+                                                        
+                                                        for j := 0; j < len(ctx.FileInfos); j++ {
+                                                                shareDetail.AllShares[j] = fmt.Sprintf("party%d", j+1)
+                                                        }
+                                                        
+                                                        result.ShareDetails = append(result.ShareDetails, shareDetail)
+                                                } else {
+                                                        // Successfully decrypted and parsed - extract proper ShareDetails
+                                                        shareDetail := ShareDetails{
+                                                                BackupName:    vault.Name,
+                                                                ThisShare:     vault.LocalPartyId,
+                                                                ResharePrefix: vault.ResharePrefix,
+                                                        }
+
+                                                        // Generate all party IDs (simplified approach)
+                                                        shareDetail.AllShares = make([]string, len(ctx.FileInfos))
+                                                        for j := 0; j < len(ctx.FileInfos); j++ {
+                                                                shareDetail.AllShares[j] = fmt.Sprintf("party%d", j+1)
+                                                        }
+
+                                                        result.ShareDetails = append(result.ShareDetails, shareDetail)
+                                                }
+                                        }
+                                }
                         }
-                        
-                        // Generate all party IDs
-                        for j := 0; j < len(fileInfos); j++ {
-                                shareDetail.AllShares[j] = fmt.Sprintf("party%d", j+1)
-                        }
-                        
-                        result.ShareDetails = append(result.ShareDetails, shareDetail)
                 } else {
                         // For unencrypted vaults, try to extract more detailed information
                         vaultBytes, err := base64.StdEncoding.DecodeString(vaultContainer.Vault)
@@ -249,10 +290,10 @@ func ProcessDKLSFileContentJSON(fileInfos []utils.FileInfo, passwords []string, 
                                 shareDetail := ShareDetails{
                                         BackupName: file.Name,
                                         ThisShare:  fmt.Sprintf("party%d", i+1),
-                                        AllShares:  make([]string, len(fileInfos)),
+                                        AllShares:  make([]string, len(ctx.FileInfos)),
                                 }
                                 
-                                for j := 0; j < len(fileInfos); j++ {
+                                for j := 0; j < len(ctx.FileInfos); j++ {
                                         shareDetail.AllShares[j] = fmt.Sprintf("party%d", j+1)
                                 }
                                 
@@ -267,10 +308,10 @@ func ProcessDKLSFileContentJSON(fileInfos []utils.FileInfo, passwords []string, 
                                 shareDetail := ShareDetails{
                                         BackupName: file.Name,
                                         ThisShare:  fmt.Sprintf("party%d", i+1),
-                                        AllShares:  make([]string, len(fileInfos)),
+                                        AllShares:  make([]string, len(ctx.FileInfos)),
                                 }
                                 
-                                for j := 0; j < len(fileInfos); j++ {
+                                for j := 0; j < len(ctx.FileInfos); j++ {
                                         shareDetail.AllShares[j] = fmt.Sprintf("party%d", j+1)
                                 }
                                 
@@ -285,8 +326,8 @@ func ProcessDKLSFileContentJSON(fileInfos []utils.FileInfo, passwords []string, 
                         }
 
                         // Generate all party IDs (simplified approach)
-                        shareDetail.AllShares = make([]string, len(fileInfos))
-                        for j := 0; j < len(fileInfos); j++ {
+                        shareDetail.AllShares = make([]string, len(ctx.FileInfos))
+                        for j := 0; j < len(ctx.FileInfos); j++ {
                                 shareDetail.AllShares[j] = fmt.Sprintf("party%d", j+1)
                         }
 
@@ -295,27 +336,150 @@ func ProcessDKLSFileContentJSON(fileInfos []utils.FileInfo, passwords []string, 
         }
 
         // Use the existing DeriveAndShowKeysJSON logic to get structured key data
-        deriveResult, err := DeriveAndShowKeysJSON(privateKeyHex, rootChainCodeHex, "", eddsaPublicKeyHex)
+        deriveResult, err := DeriveAndShowKeysJSON(ctx.PrivateKeyHex, ctx.RootChainCodeHex, "", ctx.EdDSAPublicKeyHex)
         if err != nil {
                 result.Success = false
                 result.Error = fmt.Sprintf("error deriving keys: %v", err)
-                return result, fmt.Errorf("error deriving keys: %w", err)
+                return fmt.Errorf("error deriving keys: %w", err)
         }
 
         // Populate the result with the derived key information
         result.RootKeyInfo = &deriveResult.RootKeyInfo
         result.PublicKeys.ECDSA = deriveResult.RootKeyInfo.HexPubKeyECDSA
-        if eddsaPublicKeyHex != "" {
-                result.PublicKeys.EdDSA = eddsaPublicKeyHex
+        if ctx.EdDSAPublicKeyHex != "" {
+                result.PublicKeys.EdDSA = ctx.EdDSAPublicKeyHex
         }
 
         // Combine ECDSA and EdDSA keys into a single CoinKeys array
         result.CoinKeys = append(result.CoinKeys, deriveResult.ECDSAKeys...)
         result.CoinKeys = append(result.CoinKeys, deriveResult.EdDSAKeys...)
 
-        // Keep raw output for backward compatibility
+        return nil
+}
+
+// processFileContentGeneric implements the unified processing pipeline
+func processFileContentGeneric(ctx FileProcessingContext, config FileProcessingConfig) (ProcessResult, error) {
+        log.Printf("Processing files using %s strategy with %d files", config.StrategyName, len(ctx.FileInfos))
+
+        // Step 1: Set up logging
+        setupLogging()
+
+        // Step 2: Validate input parameters
+        if err := validateFileProcessingInput(ctx.FileInfos); err != nil {
+                result := initializeProcessingResult()
+                result.Success = false
+                result.Error = err.Error()
+                return result, err
+        }
+
+        // Step 3: Initialize result
+        result := initializeProcessingResult()
+
+        // Step 4: Process files using the specific strategy
+        if err := config.Strategy.ProcessFiles(ctx, &result); err != nil {
+                return result, err
+        }
 
         return result, nil
+}
+
+// Helper Functions and Existing Functions
+
+// decodeAndParseVaultContainer consolidates the base64 decode and VaultContainer parsing logic.
+// Returns the decoded data and parsed VaultContainer, or error if parsing fails.
+func decodeAndParseVaultContainer(fileContent []byte) ([]byte, *v1.VaultContainer, error) {
+        contentStr := strings.TrimSpace(string(fileContent))
+        
+        // Try to decode as base64 first
+        decodedData, err := base64.StdEncoding.DecodeString(contentStr)
+        if err != nil {
+                log.Printf("Content is not base64 encoded, using raw data")
+                decodedData = fileContent
+        } else {
+                log.Printf("Successfully decoded from base64")
+        }
+
+        // Try to parse as protobuf VaultContainer
+        var vaultContainer v1.VaultContainer
+        if err := proto.Unmarshal(decodedData, &vaultContainer); err != nil {
+                return decodedData, nil, err
+        }
+        
+        return decodedData, &vaultContainer, nil
+}
+
+// decodeAndExtractLocalState consolidates the file parsing logic that was duplicated across functions.
+// It handles base64 decoding, protobuf parsing, GG20/DKLS detection, and returns structured results.
+func decodeAndExtractLocalState(fileContent []byte, password string, source utils.InputSource) (map[utils.TssKeyType]crypto.LocalState, bool, error) {
+        decodedData, _, err := decodeAndParseVaultContainer(fileContent)
+        if err != nil {
+                log.Printf("Failed to unmarshal as protobuf VaultContainer: %v", err)
+                // Fallback to direct local state parsing (GG20 format)
+                localStates, err := utils.GetLocalStateFromContent(decodedData)
+                if err != nil {
+                        // Check if this error indicates a DKLS vault
+                        if strings.Contains(err.Error(), "DKLS vault detected") {
+                                log.Printf("DKLS vault detected during content parsing")
+                                return nil, true, fmt.Errorf("DKLS vault detected: %w", err)
+                        }
+                        return nil, false, fmt.Errorf("error parsing content: %w", err)
+                }
+                return localStates, false, nil
+        } else {
+                log.Printf("Successfully unmarshalled as protobuf VaultContainer")
+                // Parse using VaultContainer method (encrypted vault format)
+                localStates, err := utils.GetLocalStateFromBakContent(fileContent, password, source)
+                if err != nil {
+                        // Check if this error indicates a DKLS vault
+                        if strings.Contains(err.Error(), "DKLS vault detected") {
+                                log.Printf("DKLS vault detected during vault container parsing")
+                                return nil, true, fmt.Errorf("DKLS vault detected: %w", err)
+                        }
+                        return nil, false, fmt.Errorf("error processing vault container: %w", err)
+                }
+                return localStates, false, nil
+        }
+}
+
+// ProcessFileContentJSON processes GG20 files and returns structured JSON data using unified pipeline
+func ProcessFileContentJSON(fileInfos []utils.FileInfo, passwords []string, source utils.InputSource) (ProcessResult, error) {
+        // Create context for GG20 processing
+        ctx := FileProcessingContext{
+                FileInfos: fileInfos,
+                Passwords: passwords,
+                Source:    source,
+        }
+
+        // Configure pipeline for GG20 processing
+        config := FileProcessingConfig{
+                StrategyName: "GG20",
+                Strategy:     &GG20Strategy{},
+        }
+
+        // Process files using the unified pipeline
+        return processFileContentGeneric(ctx, config)
+}
+
+// ProcessDKLSFileContentJSON processes DKLS vault files and returns structured JSON data using unified pipeline
+func ProcessDKLSFileContentJSON(fileInfos []utils.FileInfo, passwords []string, privateKeyHex, rootChainCodeHex, eddsaPublicKeyHex string) (ProcessResult, error) {
+        // Create context for DKLS processing
+        ctx := FileProcessingContext{
+                FileInfos:         fileInfos,
+                Passwords:         passwords,
+                Source:            utils.Web, // Default source for DKLS
+                PrivateKeyHex:     privateKeyHex,
+                RootChainCodeHex:  rootChainCodeHex,
+                EdDSAPublicKeyHex: eddsaPublicKeyHex,
+        }
+
+        // Configure pipeline for DKLS processing
+        config := FileProcessingConfig{
+                StrategyName: "DKLS",
+                Strategy:     &DKLSStrategy{},
+        }
+
+        // Process files using the unified pipeline
+        return processFileContentGeneric(ctx, config)
 }
 
 func ParseLocalState(content []byte) (map[utils.TssKeyType]crypto.LocalState, error) {
