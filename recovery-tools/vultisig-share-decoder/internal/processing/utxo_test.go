@@ -1,230 +1,434 @@
 package processing
 
 import (
-        "encoding/hex"
-        "testing"
+	"encoding/hex"
+	"testing"
 
-        "github.com/btcsuite/btcd/btcutil/hdkeychain"
-        "github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-// TestDashAndZcashAddressGeneration tests the new Dash and Zcash address generation
-// using the exact test data provided by the user
-func TestDashAndZcashAddressGeneration(t *testing.T) {
-        // Test data provided by the user
-        privKeyHex := "1bbfb2b193244ec30a4ec90401808675569c9a8eec76f69dbe9451c3504298fc"
-        expectedDashAddress := "XkoQBncrZgAmHSYYhkjZqMF7NhPTBhbWbC"
-        expectedZcashAddress := "t1ZiDZcAQMkRPQMEZTkJFAi7oZSJjn73Shb"
+// Test data provided by the user - same private key for all tests
+const testPrivKeyHex = "1bbfb2b193244ec30a4ec90401808675569c9a8eec76f69dbe9451c3504298fc"
 
-        // Convert hex string to private key bytes
-        privKeyBytes, err := hex.DecodeString(privKeyHex)
-        if err != nil {
-                t.Fatalf("failed to decode private key hex: %v", err)
-        }
+// setupTestKeyPair creates the test key pair and extended key for testing
+func setupTestKeyPair(t *testing.T) (*ECKeyPair, *hdkeychain.ExtendedKey) {
+	// Convert hex string to private key bytes
+	privKeyBytes, err := hex.DecodeString(testPrivKeyHex)
+	if err != nil {
+		t.Fatalf("failed to decode private key hex: %v", err)
+	}
 
-        // Create secp256k1 private key
-        privKey := secp256k1.PrivKeyFromBytes(privKeyBytes)
-        keyPair := &ECKeyPair{
-                PrivateKey: privKey,
-                PublicKey:  privKey.PubKey(),
-        }
+	// Create secp256k1 private key
+	privKey := secp256k1.PrivKeyFromBytes(privKeyBytes)
+	keyPair := &ECKeyPair{
+		PrivateKey: privKey,
+		PublicKey:  privKey.PubKey(),
+	}
 
-        // Create dummy extended key for builder initialization (not used in actual processing)
-        extendedKey, err := hdkeychain.NewKeyFromString("xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi")
-        if err != nil {
-                t.Fatalf("failed to create extended key: %v", err)
-        }
+	// Create dummy extended key for builder initialization (not used in actual processing)
+	extendedKey, err := hdkeychain.NewKeyFromString("xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi")
+	if err != nil {
+		t.Fatalf("failed to create extended key: %v", err)
+	}
 
-        // Test Dash
-        t.Run("Dash", func(t *testing.T) {
-                dashConfig := EnhancedCoinConfig{
-                        Name:       "dash",
-                        DerivePath: "m/44'/5'/0'/0/0",
-                        Family:     FamilyUTXO,
-                        Params: CoinParams{
-                                "addressType": "p2pkh",
-                                "network":     "mainnet",
-                                "compressed":  true,
-                        },
-                        Handler: UTXOHandler,
-                }
-
-                builder := InitializeCoinBuilder(dashConfig, extendedKey, keyPair)
-                builder.SetNetworkParams("mainnet")
-
-                result, err := processDash(builder, keyPair)
-                if err != nil {
-                        t.Fatalf("processDash failed: %v", err)
-                }
-
-                if result.Address != expectedDashAddress {
-                        t.Errorf("Dash address mismatch:\nExpected: %s\nGot:      %s", expectedDashAddress, result.Address)
-                }
-
-                // Verify other fields are set
-                if result.Name != "dash" {
-                        t.Errorf("Expected name to be 'dash', got '%s'", result.Name)
-                }
-                if result.WIFPrivateKey == "" {
-                        t.Error("WIF private key should not be empty")
-                }
-                if result.HexPrivateKey != privKeyHex {
-                        t.Errorf("Hex private key mismatch:\nExpected: %s\nGot:      %s", privKeyHex, result.HexPrivateKey)
-                }
-
-                t.Logf("✓ Dash test passed - Address: %s", result.Address)
-        })
-
-        // Test Zcash
-        t.Run("Zcash", func(t *testing.T) {
-                zcashConfig := EnhancedCoinConfig{
-                        Name:       "zcash",
-                        DerivePath: "m/44'/133'/0'/0/0",
-                        Family:     FamilyUTXO,
-                        Params: CoinParams{
-                                "addressType": "p2pkh",
-                                "network":     "mainnet",
-                                "compressed":  true,
-                        },
-                        Handler: UTXOHandler,
-                }
-
-                builder := InitializeCoinBuilder(zcashConfig, extendedKey, keyPair)
-                builder.SetNetworkParams("mainnet")
-
-                result, err := processZcash(builder, keyPair)
-                if err != nil {
-                        t.Fatalf("processZcash failed: %v", err)
-                }
-
-                if result.Address != expectedZcashAddress {
-                        t.Errorf("Zcash address mismatch:\nExpected: %s\nGot:      %s", expectedZcashAddress, result.Address)
-                }
-
-                // Verify other fields are set
-                if result.Name != "zcash" {
-                        t.Errorf("Expected name to be 'zcash', got '%s'", result.Name)
-                }
-                if result.WIFPrivateKey == "" {
-                        t.Error("WIF private key should not be empty")
-                }
-                if result.HexPrivateKey != privKeyHex {
-                        t.Errorf("Hex private key mismatch:\nExpected: %s\nGot:      %s", privKeyHex, result.HexPrivateKey)
-                }
-
-                t.Logf("✓ Zcash test passed - Address: %s", result.Address)
-        })
+	return keyPair, extendedKey
 }
 
-// TestDashAndZcashConfigSetup verifies the new coins are properly configured
-func TestDashAndZcashConfigSetup(t *testing.T) {
-        coins := GetEnhancedECDSACoins()
-        
-        var dashFound, zcashFound bool
-        
-        for _, coin := range coins {
-                switch coin.Name {
-                case "dash":
-                        dashFound = true
-                        if coin.DerivePath != "m/44'/5'/0'/0/0" {
-                                t.Errorf("Wrong derive path for Dash: expected m/44'/5'/0'/0/0, got %s", coin.DerivePath)
-                        }
-                        if coin.Family != FamilyUTXO {
-                                t.Errorf("Wrong family for Dash: expected %s, got %s", FamilyUTXO, coin.Family)
-                        }
-                        if coin.Handler == nil {
-                                t.Error("Handler is nil for Dash")
-                        }
-                        
-                case "zcash":
-                        zcashFound = true
-                        if coin.DerivePath != "m/44'/133'/0'/0/0" {
-                                t.Errorf("Wrong derive path for Zcash: expected m/44'/133'/0'/0/0, got %s", coin.DerivePath)
-                        }
-                        if coin.Family != FamilyUTXO {
-                                t.Errorf("Wrong family for Zcash: expected %s, got %s", FamilyUTXO, coin.Family)
-                        }
-                        if coin.Handler == nil {
-                                t.Error("Handler is nil for Zcash")
-                        }
-                }
-        }
-        
-        if !dashFound {
-                t.Error("Dash configuration not found in GetEnhancedECDSACoins()")
-        }
-        if !zcashFound {
-                t.Error("Zcash configuration not found in GetEnhancedECDSACoins()")
-        }
-        
-        t.Logf("✓ Both Dash and Zcash configurations found and validated")
+// TestBitcoinAddressGeneration tests Bitcoin address generation
+func TestBitcoinAddressGeneration(t *testing.T) {
+	expectedAddress := "bc1qvn203p8pp30fk945eywrjey937qpaanha8hc4r"
+	
+	keyPair, extendedKey := setupTestKeyPair(t)
+
+	config := EnhancedCoinConfig{
+		Name:       "bitcoin",
+		DerivePath: "m/84'/0'/0'/0/0",
+		Family:     FamilyUTXO,
+		Params: CoinParams{
+			"addressType": "p2wpkh",
+			"network":     "mainnet",
+			"compressed":  true,
+		},
+		Handler: UTXOHandler,
+	}
+
+	builder := InitializeCoinBuilder(config, extendedKey, keyPair)
+	builder.SetNetworkParams("mainnet")
+
+	result, err := processBitcoin(builder, keyPair)
+	if err != nil {
+		t.Fatalf("processBitcoin failed: %v", err)
+	}
+
+	if result.Address != expectedAddress {
+		t.Errorf("Bitcoin address mismatch:\nExpected: %s\nGot:      %s", expectedAddress, result.Address)
+	}
+
+	// Verify other fields
+	if result.Name != "bitcoin" {
+		t.Errorf("Expected name to be 'bitcoin', got '%s'", result.Name)
+	}
+	if result.WIFPrivateKey == "" {
+		t.Error("WIF private key should not be empty")
+	}
+	if result.HexPrivateKey != testPrivKeyHex {
+		t.Errorf("Hex private key mismatch:\nExpected: %s\nGot:      %s", testPrivKeyHex, result.HexPrivateKey)
+	}
+
+	t.Logf("✓ Bitcoin test passed - Address: %s", result.Address)
 }
 
-// TestUTXOHandlerWithNewCoins tests the UTXOHandler with the new coins
-func TestUTXOHandlerWithNewCoins(t *testing.T) {
-        // Create a test extended key
-        extendedKey, err := hdkeychain.NewKeyFromString("xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi")
-        if err != nil {
-                t.Fatalf("failed to create extended key: %v", err)
-        }
+// TestDogecoinAddressGeneration tests Dogecoin address generation
+func TestDogecoinAddressGeneration(t *testing.T) {
+	expectedAddress := "DBMQ8aectXEd264wa7UoHT8YsghnXoxyrC"
+	
+	keyPair, extendedKey := setupTestKeyPair(t)
 
-        testCases := []struct {
-                name           string
-                coinName       string
-                derivePath     string
-                expectedFamily CoinFamily
-        }{
-                {
-                        name:           "Dash",
-                        coinName:       "dash",
-                        derivePath:     "m/44'/5'/0'/0/0",
-                        expectedFamily: FamilyUTXO,
-                },
-                {
-                        name:           "Zcash",
-                        coinName:       "zcash",
-                        derivePath:     "m/44'/133'/0'/0/0",
-                        expectedFamily: FamilyUTXO,
-                },
-        }
+	config := EnhancedCoinConfig{
+		Name:       "dogecoin",
+		DerivePath: "m/44'/3'/0'/0/0",
+		Family:     FamilyUTXO,
+		Params: CoinParams{
+			"addressType": "p2pkh",
+			"network":     "mainnet",
+			"compressed":  true,
+		},
+		Handler: UTXOHandler,
+	}
 
-        for _, tc := range testCases {
-                t.Run(tc.name, func(t *testing.T) {
-                        config := EnhancedCoinConfig{
-                                Name:       tc.coinName,
-                                DerivePath: tc.derivePath,
-                                Family:     tc.expectedFamily,
-                                Params: CoinParams{
-                                        "addressType": "p2pkh",
-                                        "network":     "mainnet",
-                                        "compressed":  true,
-                                },
-                                Handler: UTXOHandler,
-                        }
+	builder := InitializeCoinBuilder(config, extendedKey, keyPair)
+	builder.SetNetworkParams("mainnet")
 
-                        result, err := UTXOHandler(extendedKey, config)
-                        if err != nil {
-                                t.Fatalf("UTXOHandler failed for %s: %v", tc.coinName, err)
-                        }
+	result, err := processDogecoin(builder, keyPair)
+	if err != nil {
+		t.Fatalf("processDogecoin failed: %v", err)
+	}
 
-                        // Verify basic fields are populated
-                        if result.Name != tc.coinName {
-                                t.Errorf("Expected name to be '%s', got '%s'", tc.coinName, result.Name)
-                        }
-                        if result.Address == "" {
-                                t.Error("Address should not be empty")
-                        }
-                        if result.WIFPrivateKey == "" {
-                                t.Error("WIF private key should not be empty")
-                        }
-                        if result.HexPrivateKey == "" {
-                                t.Error("Hex private key should not be empty")
-                        }
-                        if result.HexPublicKey == "" {
-                                t.Error("Hex public key should not be empty")
-                        }
+	if result.Address != expectedAddress {
+		t.Errorf("Dogecoin address mismatch:\nExpected: %s\nGot:      %s", expectedAddress, result.Address)
+	}
 
-                        t.Logf("✓ %s UTXOHandler test passed - Address: %s", tc.name, result.Address)
-                })
-        }
+	// Verify other fields
+	if result.Name != "dogecoin" {
+		t.Errorf("Expected name to be 'dogecoin', got '%s'", result.Name)
+	}
+	if result.WIFPrivateKey == "" {
+		t.Error("WIF private key should not be empty")
+	}
+	if result.HexPrivateKey != testPrivKeyHex {
+		t.Errorf("Hex private key mismatch:\nExpected: %s\nGot:      %s", testPrivKeyHex, result.HexPrivateKey)
+	}
+
+	t.Logf("✓ Dogecoin test passed - Address: %s", result.Address)
+}
+
+// TestLitecoinAddressGeneration tests Litecoin address generation
+func TestLitecoinAddressGeneration(t *testing.T) {
+	expectedAddress := "ltc1qkgguledp08hpmcqsccxvwgr7xvhj7422qyz0l7"
+	
+	keyPair, extendedKey := setupTestKeyPair(t)
+
+	config := EnhancedCoinConfig{
+		Name:       "litecoin",
+		DerivePath: "m/84'/2'/0'/0/0",
+		Family:     FamilyUTXO,
+		Params: CoinParams{
+			"addressType": "p2wpkh",
+			"network":     "mainnet",
+			"compressed":  true,
+		},
+		Handler: UTXOHandler,
+	}
+
+	builder := InitializeCoinBuilder(config, extendedKey, keyPair)
+	builder.SetNetworkParams("mainnet")
+
+	result, err := processLitecoin(builder, keyPair)
+	if err != nil {
+		t.Fatalf("processLitecoin failed: %v", err)
+	}
+
+	if result.Address != expectedAddress {
+		t.Errorf("Litecoin address mismatch:\nExpected: %s\nGot:      %s", expectedAddress, result.Address)
+	}
+
+	// Verify other fields
+	if result.Name != "litecoin" {
+		t.Errorf("Expected name to be 'litecoin', got '%s'", result.Name)
+	}
+	if result.WIFPrivateKey == "" {
+		t.Error("WIF private key should not be empty")
+	}
+	if result.HexPrivateKey != testPrivKeyHex {
+		t.Errorf("Hex private key mismatch:\nExpected: %s\nGot:      %s", testPrivKeyHex, result.HexPrivateKey)
+	}
+
+	t.Logf("✓ Litecoin test passed - Address: %s", result.Address)
+}
+
+// TestBitcoinCashAddressGeneration tests Bitcoin Cash address generation
+func TestBitcoinCashAddressGeneration(t *testing.T) {
+	expectedAddress := "qp6379srrchrk2mfs32d2czxkx9wz2gx4qekc0x4xx"
+	
+	keyPair, extendedKey := setupTestKeyPair(t)
+
+	config := EnhancedCoinConfig{
+		Name:       "bitcoinCash",
+		DerivePath: "m/44'/145'/0'/0/0",
+		Family:     FamilyUTXO,
+		Params: CoinParams{
+			"addressType": "p2pkh",
+			"network":     "mainnet",
+			"compressed":  true,
+		},
+		Handler: UTXOHandler,
+	}
+
+	builder := InitializeCoinBuilder(config, extendedKey, keyPair)
+	builder.SetNetworkParams("mainnet")
+
+	result, err := processBitcoinCash(builder, keyPair)
+	if err != nil {
+		t.Fatalf("processBitcoinCash failed: %v", err)
+	}
+
+	if result.Address != expectedAddress {
+		t.Errorf("Bitcoin Cash address mismatch:\nExpected: %s\nGot:      %s", expectedAddress, result.Address)
+	}
+
+	// Verify other fields
+	if result.Name != "bitcoinCash" {
+		t.Errorf("Expected name to be 'bitcoinCash', got '%s'", result.Name)
+	}
+	if result.WIFPrivateKey == "" {
+		t.Error("WIF private key should not be empty")
+	}
+	if result.HexPrivateKey != testPrivKeyHex {
+		t.Errorf("Hex private key mismatch:\nExpected: %s\nGot:      %s", testPrivKeyHex, result.HexPrivateKey)
+	}
+
+	t.Logf("✓ Bitcoin Cash test passed - Address: %s", result.Address)
+}
+
+// TestDashAddressGeneration tests Dash address generation
+func TestDashAddressGeneration(t *testing.T) {
+	expectedAddress := "XkoQBncrZgAmHSYYhkjZqMF7NhPTBhbWbC"
+	
+	keyPair, extendedKey := setupTestKeyPair(t)
+
+	config := EnhancedCoinConfig{
+		Name:       "dash",
+		DerivePath: "m/44'/5'/0'/0/0",
+		Family:     FamilyUTXO,
+		Params: CoinParams{
+			"addressType": "p2pkh",
+			"network":     "mainnet",
+			"compressed":  true,
+		},
+		Handler: UTXOHandler,
+	}
+
+	builder := InitializeCoinBuilder(config, extendedKey, keyPair)
+	builder.SetNetworkParams("mainnet")
+
+	result, err := processDash(builder, keyPair)
+	if err != nil {
+		t.Fatalf("processDash failed: %v", err)
+	}
+
+	if result.Address != expectedAddress {
+		t.Errorf("Dash address mismatch:\nExpected: %s\nGot:      %s", expectedAddress, result.Address)
+	}
+
+	// Verify other fields
+	if result.Name != "dash" {
+		t.Errorf("Expected name to be 'dash', got '%s'", result.Name)
+	}
+	if result.WIFPrivateKey == "" {
+		t.Error("WIF private key should not be empty")
+	}
+	if result.HexPrivateKey != testPrivKeyHex {
+		t.Errorf("Hex private key mismatch:\nExpected: %s\nGot:      %s", testPrivKeyHex, result.HexPrivateKey)
+	}
+
+	t.Logf("✓ Dash test passed - Address: %s", result.Address)
+}
+
+// TestZcashAddressGeneration tests Zcash address generation
+func TestZcashAddressGeneration(t *testing.T) {
+	expectedAddress := "t1ZiDZcAQMkRPQMEZTkJFAi7oZSJjn73Shb"
+	
+	keyPair, extendedKey := setupTestKeyPair(t)
+
+	config := EnhancedCoinConfig{
+		Name:       "zcash",
+		DerivePath: "m/44'/133'/0'/0/0",
+		Family:     FamilyUTXO,
+		Params: CoinParams{
+			"addressType": "p2pkh",
+			"network":     "mainnet",
+			"compressed":  true,
+		},
+		Handler: UTXOHandler,
+	}
+
+	builder := InitializeCoinBuilder(config, extendedKey, keyPair)
+	builder.SetNetworkParams("mainnet")
+
+	result, err := processZcash(builder, keyPair)
+	if err != nil {
+		t.Fatalf("processZcash failed: %v", err)
+	}
+
+	if result.Address != expectedAddress {
+		t.Errorf("Zcash address mismatch:\nExpected: %s\nGot:      %s", expectedAddress, result.Address)
+	}
+
+	// Verify other fields
+	if result.Name != "zcash" {
+		t.Errorf("Expected name to be 'zcash', got '%s'", result.Name)
+	}
+	if result.WIFPrivateKey == "" {
+		t.Error("WIF private key should not be empty")
+	}
+	if result.HexPrivateKey != testPrivKeyHex {
+		t.Errorf("Hex private key mismatch:\nExpected: %s\nGot:      %s", testPrivKeyHex, result.HexPrivateKey)
+	}
+
+	t.Logf("✓ Zcash test passed - Address: %s", result.Address)
+}
+
+// TestAllUTXOCoinsConfigSetup verifies all UTXO coins are properly configured
+func TestAllUTXOCoinsConfigSetup(t *testing.T) {
+	coins := GetEnhancedECDSACoins()
+	
+	expectedCoins := map[string]string{
+		"bitcoin":     "m/84'/0'/0'/0/0",
+		"bitcoinCash": "m/44'/145'/0'/0/0",
+		"dogecoin":    "m/44'/3'/0'/0/0",
+		"litecoin":    "m/84'/2'/0'/0/0",
+		"dash":        "m/44'/5'/0'/0/0",
+		"zcash":       "m/44'/133'/0'/0/0",
+	}
+	
+	found := make(map[string]bool)
+	
+	for _, coin := range coins {
+		if expectedPath, exists := expectedCoins[coin.Name]; exists {
+			found[coin.Name] = true
+			
+			if coin.DerivePath != expectedPath {
+				t.Errorf("Wrong derive path for %s: expected %s, got %s", coin.Name, expectedPath, coin.DerivePath)
+			}
+			if coin.Family != FamilyUTXO {
+				t.Errorf("Wrong family for %s: expected %s, got %s", coin.Name, FamilyUTXO, coin.Family)
+			}
+			if coin.Handler == nil {
+				t.Errorf("Handler is nil for %s", coin.Name)
+			}
+		}
+	}
+	
+	// Verify all expected coins were found
+	for coinName := range expectedCoins {
+		if !found[coinName] {
+			t.Errorf("Missing coin configuration: %s", coinName)
+		}
+	}
+	
+	t.Logf("✓ All %d UTXO coins configurations found and validated", len(expectedCoins))
+}
+
+// TestUTXOHandlerWithAllCoins tests the UTXOHandler with all UTXO coins
+func TestUTXOHandlerWithAllCoins(t *testing.T) {
+	// Create a test extended key
+	extendedKey, err := hdkeychain.NewKeyFromString("xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi")
+	if err != nil {
+		t.Fatalf("failed to create extended key: %v", err)
+	}
+
+	testCases := []struct {
+		name           string
+		coinName       string
+		derivePath     string
+		addressType    string
+	}{
+		{
+			name:        "Bitcoin",
+			coinName:    "bitcoin",
+			derivePath:  "m/84'/0'/0'/0/0",
+			addressType: "p2wpkh",
+		},
+		{
+			name:        "Bitcoin Cash",
+			coinName:    "bitcoinCash",
+			derivePath:  "m/44'/145'/0'/0/0",
+			addressType: "p2pkh",
+		},
+		{
+			name:        "Dogecoin",
+			coinName:    "dogecoin",
+			derivePath:  "m/44'/3'/0'/0/0",
+			addressType: "p2pkh",
+		},
+		{
+			name:        "Litecoin",
+			coinName:    "litecoin",
+			derivePath:  "m/84'/2'/0'/0/0",
+			addressType: "p2wpkh",
+		},
+		{
+			name:        "Dash",
+			coinName:    "dash",
+			derivePath:  "m/44'/5'/0'/0/0",
+			addressType: "p2pkh",
+		},
+		{
+			name:        "Zcash",
+			coinName:    "zcash",
+			derivePath:  "m/44'/133'/0'/0/0",
+			addressType: "p2pkh",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := EnhancedCoinConfig{
+				Name:       tc.coinName,
+				DerivePath: tc.derivePath,
+				Family:     FamilyUTXO,
+				Params: CoinParams{
+					"addressType": tc.addressType,
+					"network":     "mainnet",
+					"compressed":  true,
+				},
+				Handler: UTXOHandler,
+			}
+
+			result, err := UTXOHandler(extendedKey, config)
+			if err != nil {
+				t.Fatalf("UTXOHandler failed for %s: %v", tc.coinName, err)
+			}
+
+			// Verify basic fields are populated
+			if result.Name != tc.coinName {
+				t.Errorf("Expected name to be '%s', got '%s'", tc.coinName, result.Name)
+			}
+			if result.Address == "" {
+				t.Error("Address should not be empty")
+			}
+			if result.WIFPrivateKey == "" {
+				t.Error("WIF private key should not be empty")
+			}
+			if result.HexPrivateKey == "" {
+				t.Error("Hex private key should not be empty")
+			}
+			if result.HexPublicKey == "" {
+				t.Error("Hex public key should not be empty")
+			}
+
+			t.Logf("✓ %s UTXOHandler test passed - Address: %s", tc.name, result.Address)
+		})
+	}
 }
