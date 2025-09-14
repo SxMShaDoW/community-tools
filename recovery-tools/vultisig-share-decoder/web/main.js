@@ -489,28 +489,24 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
         let jsonKeysData = null;
         
         try {
-            if (window.DeriveAndShowKeysJSON) {
-                debugLog("Using JSON version of DeriveAndShowKeys");
-                const jsonResult = window.DeriveAndShowKeysJSON(privateKeyHex, rootChainCodeHex, "", eddsaPublicKey);
-                debugLog(`JSON result: ${jsonResult}`);
-                
-                try {
-                    jsonKeysData = JSON.parse(jsonResult);
-                    if (jsonKeysData.success) {
-                        derivedKeysOutput = formatDerivedKeysFromJSON(jsonKeysData);
-                    } else {
-                        derivedKeysOutput = `\nError deriving keys: ${jsonKeysData.error}`;
-                    }
-                } catch (parseError) {
-                    debugLog(`Error parsing JSON result: ${parseError.message}`);
-                    derivedKeysOutput = jsonResult; // Fall back to raw output
+            if (!window.DeriveAndShowKeysJSON) {
+                throw new Error("DeriveAndShowKeysJSON function not available. Please reload the page.");
+            }
+            
+            debugLog("Using JSON version of DeriveAndShowKeys");
+            const jsonResult = window.DeriveAndShowKeysJSON(privateKeyHex, rootChainCodeHex, "", eddsaPublicKey);
+            debugLog(`JSON result: ${jsonResult}`);
+            
+            try {
+                jsonKeysData = JSON.parse(jsonResult);
+                if (jsonKeysData.success) {
+                    derivedKeysOutput = formatDerivedKeysFromJSON(jsonKeysData);
+                } else {
+                    derivedKeysOutput = `\nError deriving keys: ${jsonKeysData.error}`;
                 }
-            } else if (window.DeriveAndShowKeys) {
-                debugLog("Using string version of DeriveAndShowKeys (fallback)");
-                derivedKeysOutput = window.DeriveAndShowKeys(privateKeyHex, rootChainCodeHex);
-                debugLog("Successfully derived keys using WASM");
-            } else {
-                debugLog("DeriveAndShowKeys function not available");
+            } catch (parseError) {
+                debugLog(`Error parsing JSON result: ${parseError.message}`);
+                throw new Error(`Failed to parse DeriveAndShowKeysJSON result: ${parseError.message}`);
             }
         } catch (wasmError) {
             debugLog(`WASM key derivation error: ${wasmError.message}`);
@@ -878,14 +874,7 @@ async function processWithJSONWASM(files, passwords, fileNames) {
         
         // Check if JSON function is available
         if (!window.ProcessFilesJSON) {
-            debugLog("ProcessFilesJSON function not available, falling back to string version");
-            const result = window.ProcessFiles(files, passwords, fileNames);
-            if (!result || result === "undefined") {
-                debugLog("No results were generated. Reload the page and make sure you are using different shares.");
-                return;
-            }
-            displayResults(result);
-            return;
+            throw new Error("ProcessFilesJSON function not available. Please reload the page.");
         }
 
         const jsonResult = window.ProcessFilesJSON(files, passwords, fileNames);
