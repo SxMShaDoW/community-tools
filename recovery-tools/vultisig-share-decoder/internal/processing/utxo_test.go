@@ -24,19 +24,15 @@ func TestDashAndZcashAddressGeneration(t *testing.T) {
 
         // Create secp256k1 private key
         privKey := secp256k1.PrivKeyFromBytes(privKeyBytes)
-
-        // Create a mock extended key for testing (we just need the private key)
-        // In real usage, this would come from BIP44 derivation
-        extendedKey, err := hdkeychain.NewKeyFromString("xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi")
-        if err != nil {
-                t.Fatalf("failed to create extended key: %v", err)
-        }
-
-        // Override the private key in the extended key for our test
-        // This is a bit of a hack for testing, but it allows us to use exact test data
         keyPair := &ECKeyPair{
                 PrivateKey: privKey,
                 PublicKey:  privKey.PubKey(),
+        }
+
+        // Create dummy extended key for builder initialization (not used in actual processing)
+        extendedKey, err := hdkeychain.NewKeyFromString("xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi")
+        if err != nil {
+                t.Fatalf("failed to create extended key: %v", err)
         }
 
         // Test Dash

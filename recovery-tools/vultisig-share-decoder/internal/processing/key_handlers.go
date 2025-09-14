@@ -219,24 +219,54 @@ func processDash(builder *CoinKeyBuilder, keyPair *ECKeyPair) (CoinKeyInfo, erro
 }
 
 // processZcash handles Zcash transparent address and WIF generation
+// Zcash requires custom address encoding with two-byte version prefix
 func processZcash(builder *CoinKeyBuilder, keyPair *ECKeyPair) (CoinKeyInfo, error) {
-        net := &ZcashMainNetParams
+        // Use standard Bitcoin mainnet params for WIF generation (0x80 prefix)
+        btcNet := &chaincfg.MainNetParams
         
-        wif, err := btcutil.NewWIF(keyPair.PrivateKey, net, true)
+        wif, err := btcutil.NewWIF(keyPair.PrivateKey, btcNet, true)
         if err != nil {
                 return builder.Build(), err
         }
 
-        addressPubKey, err := btcutil.NewAddressPubKeyHash(btcutil.Hash160(keyPair.PublicKey.SerializeCompressed()), net)
+        // Generate Zcash transparent address with two-byte prefix [0x1C, 0xB8]
+        zcashAddress, err := generateZcashTransparentAddress(keyPair.PublicKey.SerializeCompressed())
         if err != nil {
                 return builder.Build(), err
         }
 
-        builder.SetAddress(addressPubKey.EncodeAddress())
+        builder.SetAddress(zcashAddress)
         builder.SetWIFPrivateKey(wif.String())
         builder.SetAdditionalInfo("p2pkh")
         
         return builder.Build(), nil
+}
+
+// generateZcashTransparentAddress creates a Zcash transparent address with proper two-byte prefix
+func generateZcashTransparentAddress(pubKeyBytes []byte) (string, error) {
+        // Hash160 of the public key
+        pubKeyHash := btcutil.Hash160(pubKeyBytes)
+        
+        // Zcash transparent P2PKH version bytes [0x1C, 0xB8] for "t1" addresses
+        versionBytes := []byte{0x1C, 0xB8}
+        
+        // Combine version + hash160
+        payload := make([]byte, len(versionBytes)+len(pubKeyHash))
+        copy(payload, versionBytes)
+        copy(payload[len(versionBytes):], pubKeyHash)
+        
+        // Double SHA256 for checksum
+        firstSHA := sha256.Sum256(payload)
+        secondSHA := sha256.Sum256(firstSHA[:])
+        checksum := secondSHA[:4]
+        
+        // Final address = payload + checksum
+        fullAddr := make([]byte, len(payload)+4)
+        copy(fullAddr, payload)
+        copy(fullAddr[len(payload):], checksum)
+        
+        // Base58 encode
+        return base58.Encode(fullAddr), nil
 }
 
 // CosmosHandler unified handler for all Cosmos-family cryptocurrencies
