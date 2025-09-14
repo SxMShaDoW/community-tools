@@ -273,6 +273,7 @@ func TestZcashAddressGeneration(t *testing.T) {
         builder := InitializeCoinBuilder(config, extendedKey, keyPair)
         builder.SetNetworkParams("mainnet")
 
+        // Test direct processZcash call
         result, err := processZcash(builder, keyPair)
         if err != nil {
                 t.Fatalf("processZcash failed: %v", err)
@@ -280,6 +281,21 @@ func TestZcashAddressGeneration(t *testing.T) {
 
         if result.Address != expectedAddress {
                 t.Errorf("Zcash address mismatch:\nExpected: %s\nGot:      %s", expectedAddress, result.Address)
+        }
+        if result.Address == "" {
+                t.Error("❌ CRITICAL: Zcash address is EMPTY!")
+        }
+
+        // Test UTXOHandler routing to Zcash  
+        result2, err := UTXOHandler(extendedKey, config)
+        if err != nil {
+                t.Fatalf("UTXOHandler failed for Zcash: %v", err)
+        }
+        if result2.Address != expectedAddress {
+                t.Errorf("UTXOHandler Zcash address mismatch:\nExpected: %s\nGot:      %s", expectedAddress, result2.Address)
+        }
+        if result2.Address == "" {
+                t.Error("❌ CRITICAL: UTXOHandler Zcash address is EMPTY!")
         }
 
         // Verify other fields
@@ -294,6 +310,7 @@ func TestZcashAddressGeneration(t *testing.T) {
         }
 
         t.Logf("✓ Zcash test passed - Address: %s", result.Address)
+        t.Logf("✓ UTXOHandler Zcash test passed - Address: %s", result2.Address)
 }
 
 // TestAllUTXOCoinsConfigSetup verifies all UTXO coins are properly configured

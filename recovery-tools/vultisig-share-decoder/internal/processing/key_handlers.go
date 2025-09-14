@@ -226,13 +226,18 @@ func processZcash(builder *CoinKeyBuilder, keyPair *ECKeyPair) (CoinKeyInfo, err
         
         wif, err := btcutil.NewWIF(keyPair.PrivateKey, btcNet, true)
         if err != nil {
-                return builder.Build(), err
+                return builder.Build(), fmt.Errorf("failed to create Zcash WIF: %w", err)
         }
 
         // Generate Zcash transparent address with two-byte prefix [0x1C, 0xB8]
         zcashAddress, err := generateZcashTransparentAddress(keyPair.PublicKey.SerializeCompressed())
         if err != nil {
-                return builder.Build(), err
+                return builder.Build(), fmt.Errorf("failed to generate Zcash address: %w", err)
+        }
+        
+        // Additional validation: ensure address is not empty (critical for UI display)
+        if zcashAddress == "" {
+                return builder.Build(), fmt.Errorf("Zcash address generation returned empty string")
         }
 
         builder.SetAddress(zcashAddress)
@@ -243,30 +248,48 @@ func processZcash(builder *CoinKeyBuilder, keyPair *ECKeyPair) (CoinKeyInfo, err
 }
 
 // generateZcashTransparentAddress creates a Zcash transparent address with proper two-byte prefix
+// Uses manual encoding to ensure WASM compatibility and proper validation
 func generateZcashTransparentAddress(pubKeyBytes []byte) (string, error) {
+        if len(pubKeyBytes) == 0 {
+                return "", fmt.Errorf("public key bytes cannot be empty")
+        }
+        
         // Hash160 of the public key
         pubKeyHash := btcutil.Hash160(pubKeyBytes)
+        if len(pubKeyHash) != 20 {
+                return "", fmt.Errorf("invalid hash160 length: %d", len(pubKeyHash))
+        }
         
         // Zcash transparent P2PKH version bytes [0x1C, 0xB8] for "t1" addresses
         versionBytes := []byte{0x1C, 0xB8}
         
-        // Combine version + hash160
-        payload := make([]byte, len(versionBytes)+len(pubKeyHash))
-        copy(payload, versionBytes)
-        copy(payload[len(versionBytes):], pubKeyHash)
+        // Combine version + hash160 (manual encoding for WASM reliability)
+        versioned := make([]byte, 0, len(versionBytes)+len(pubKeyHash))
+        versioned = append(versioned, versionBytes...)
+        versioned = append(versioned, pubKeyHash...)
         
-        // Double SHA256 for checksum
-        firstSHA := sha256.Sum256(payload)
-        secondSHA := sha256.Sum256(firstSHA[:])
-        checksum := secondSHA[:4]
+        // Double SHA256 for checksum (explicit implementation)
+        firstHash := sha256.Sum256(versioned)
+        secondHash := sha256.Sum256(firstHash[:])
+        checksum := secondHash[:4]
         
-        // Final address = payload + checksum
-        fullAddr := make([]byte, len(payload)+4)
-        copy(fullAddr, payload)
-        copy(fullAddr[len(payload):], checksum)
+        // Final address = versioned payload + checksum
+        finalAddr := make([]byte, 0, len(versioned)+4)
+        finalAddr = append(finalAddr, versioned...)
+        finalAddr = append(finalAddr, checksum...)
         
-        // Base58 encode
-        return base58.Encode(fullAddr), nil
+        // Base58 encode with validation
+        address := base58.Encode(finalAddr)
+        if address == "" {
+                return "", fmt.Errorf("base58 encoding failed for Zcash address")
+        }
+        
+        // Validate that address starts with 't1' (Zcash transparent address prefix)
+        if len(address) < 2 || address[:2] != "t1" {
+                return "", fmt.Errorf("invalid Zcash address format: %s (should start with 't1')", address)
+        }
+        
+        return address, nil
 }
 
 // CosmosHandler unified handler for all Cosmos-family cryptocurrencies
