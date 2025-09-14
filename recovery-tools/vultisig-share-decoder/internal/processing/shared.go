@@ -16,20 +16,6 @@ import (
         "encoding/json"
 )
 
-func ProcessFileContent(fileInfos []utils.FileInfo, passwords []string, source utils.InputSource) (string, error) {
-        // Use the JSON-based processing as primary approach 
-        result, err := ProcessFileContentJSON(fileInfos, passwords, source)
-        if err != nil {
-                return "", err
-        }
-        
-        // Legacy string output is no longer available - return structured data as JSON
-        jsonData, err := json.Marshal(result)
-        if err != nil {
-                return "Error converting result to JSON: " + err.Error(), err
-        }
-        return string(jsonData), nil
-}
 
 // ProcessFileContentJSON processes files and returns structured JSON data
 func ProcessFileContentJSON(fileInfos []utils.FileInfo, passwords []string, source utils.InputSource) (ProcessResult, error) {

@@ -1317,8 +1317,7 @@ function parseOutput(rawOutput) {
         WIFPrivateKeys: {},
         ShareDetails: '',
         PublicKeyECDSA: '',
-        PublicKeyEDDSA: '',
-        RawOutput: rawOutput
+        PublicKeyEDDSA: ''
     };
 
     // Split the output into lines
@@ -1510,15 +1509,6 @@ function displayResults(result) {
             </div>`;
     }
 
-    html += `
-    <div class="result-section">
-        <h3 class="toggle-header" onclick="toggleSection('rawOutput')">
-        Full Output <span class="toggle-arrow">▼</span> 
-        </h3>
-        <div class="content" id="rawOutput"">
-            <pre class="debug-output">${parsed.RawOutput}</pre>
-        </div>
-    </div>`
 
     resultDiv.innerHTML = html;
     debugLog('Results displayed successfully');

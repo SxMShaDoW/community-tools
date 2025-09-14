@@ -4,14 +4,15 @@
 package main
 
 import (
-        "log"
-        "syscall/js"
-        "os"
+        "encoding/json"
+        "fmt"
         "io"
+        "log"
+        "os"
         "strings"
+        "syscall/js"
         "main/internal/utils"
         "main/internal/processing"
-        "fmt"
 )
 
 func main() {
@@ -54,11 +55,16 @@ func main() {
         }
 
         // Process the files with thresholds
-        result, err := processing.ProcessFileContent(fileInfos, passwords, utils.Web)
+        result, err := processing.ProcessFileContentJSON(fileInfos, passwords, utils.Web)
         if err != nil {
             return err.Error()
         }
-        return result
+        // Convert the ProcessResult to JSON for JavaScript consumption
+        jsonData, err := json.Marshal(result)
+        if err != nil {
+            return fmt.Sprintf("Error converting result to JSON: %v", err)
+        }
+        return string(jsonData)
     }))
 
     // DeriveAndShowKeys - takes DKLS-extracted root key and derives keys for all supported coins
