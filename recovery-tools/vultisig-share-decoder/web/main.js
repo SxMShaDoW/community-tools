@@ -1082,38 +1082,34 @@ function displayRootKeyInfo(rootKeyInfo) {
     document.getElementById('rootKeySection').style.display = 'block';
 }
 
-// Cryptocurrency icon mapping
+// Cryptocurrency icon mapping with smart fallback system
 function getCryptoIcon(coinName) {
+    // Explicit mapping for special cases (aliases, edge cases, non-standard naming)
     const iconMap = {
-        'bitcoin': 'bitcoin.png',
-        'bitcoincash': 'bitcoin-cash.png',
-        'ethereum': 'ethereum.png',
-        'litecoin': 'litecoin.png',
-        'dogecoin': 'dogecoin.png',
-        'solana': 'solana.png',
-        'tron': 'tron.png',
-        'sui': 'sui.png',
-        'ton': 'ton.png',
-        'thorchain': 'thorchain.png',
-        'mayachain': 'mayachain.png',
-        'atom': 'cosmos.png',
-        'cosmos': 'cosmos.png',
-        'kujira': 'kujira.png',
-        'dydx': 'dydx.png',
-        'terra': 'terra.png',
-        'terraclassic': 'luna-classic.png',
-        'luna': 'luna-classic.png'
+        'bitcoincash': 'bitcoin-cash.png',  // Special naming case
+        'atom': 'cosmos.png',               // Alias mapping
+        'cosmos': 'cosmos.png',             // Alias mapping
+        'terraclassic': 'luna-classic.png', // Special naming case
+        'luna': 'luna-classic.png'          // Alias mapping
     };
     
     const name = coinName.toLowerCase().replace(/[^a-z]/g, '');
-    const iconFile = iconMap[name];
     
-    if (iconFile) {
-        return `<img src="icons/${iconFile}" class="crypto-icon" alt="${coinName}" />`;
-    } else {
-        // Fallback to generic crypto symbol for unknown coins
-        return '<span class="crypto-icon-fallback">🪙</span>';
+    // Try explicit mapping first (for special cases)
+    if (iconMap[name]) {
+        return `<img src="icons/${iconMap[name]}" class="crypto-icon" alt="${coinName}" />`;
     }
+    
+    // Smart fallback: try auto-generated filename {coinname}.png
+    // This makes the system automatically work for new coins that follow naming convention
+    const autoIconFile = `${name}.png`;
+    const fallbackId = `fallback-${name}-${Date.now()}`; // Unique ID for fallback element
+    
+    return `<img src="icons/${autoIconFile}" 
+                 class="crypto-icon" 
+                 alt="${coinName}"
+                 onerror="this.style.display='none'; document.getElementById('${fallbackId}').style.display='inline';" />
+            <span id="${fallbackId}" class="crypto-icon-fallback" style="display:none;">🪙</span>`;
 }
 
 function displayCoinKeys(coinKeys) {
