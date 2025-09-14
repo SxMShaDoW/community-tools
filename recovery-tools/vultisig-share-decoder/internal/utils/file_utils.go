@@ -7,7 +7,6 @@ import (
         "fmt"
         "os"
         "path/filepath"
-        "strings"
 
         "github.com/golang/protobuf/proto"
         "github.com/vultisig/commondata/go/vultisig/vault/v1"
