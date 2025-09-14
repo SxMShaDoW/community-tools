@@ -2,9 +2,11 @@ package processing
 
 import (
         "encoding/base64"
+        "encoding/hex"
         "fmt"
         "io"
         "log"
+        "math/big"
         "os"
         "strings"
 
@@ -335,25 +337,90 @@ func (s *DKLSStrategy) ProcessFiles(ctx FileProcessingContext, result *ProcessRe
                 }
         }
 
-        // Use the existing DeriveAndShowKeysJSON logic to get structured key data
-        deriveResult, err := DeriveAndShowKeysJSON(ctx.PrivateKeyHex, ctx.RootChainCodeHex, "", ctx.EdDSAPublicKeyHex)
+        // Use the unified processing pipeline (same processors as GG20) but bypass TSS reconstruction
+        // since DKLS provides reconstructed keys directly
+        err := processDKLSKeysWithUnifiedPipeline(ctx, result)
         if err != nil {
                 result.Success = false
-                result.Error = fmt.Sprintf("error deriving keys: %v", err)
-                return fmt.Errorf("error deriving keys: %w", err)
+                result.Error = fmt.Sprintf("error processing DKLS keys: %v", err)
+                return fmt.Errorf("error processing DKLS keys: %w", err)
         }
+        
+        log.Printf("DKLS processing completed successfully with %d coin keys", len(result.CoinKeys))
 
-        // Populate the result with the derived key information
-        result.RootKeyInfo = &deriveResult.RootKeyInfo
-        result.PublicKeys.ECDSA = deriveResult.RootKeyInfo.HexPubKeyECDSA
+        return nil
+}
+
+// createSyntheticTempLocalStateFromDKLS creates synthetic TempLocalState structures
+// from DKLS reconstructed keys to make them compatible with the unified processing pipeline
+func createSyntheticTempLocalStateFromDKLS(ctx FileProcessingContext) ([]utils.TempLocalState, error) {
+        // Create a single synthetic TempLocalState that contains the chain code for ECDSA processing
+        syntheticLocalState := crypto.LocalState{
+                ChainCodeHex: ctx.RootChainCodeHex,
+                // PubKey intentionally not set - will be computed during ECDSA processing
+        }
+        
+        // Create the LocalState map - only for ECDSA (EdDSA has different chain code requirements)
+        localStateMap := make(map[utils.TssKeyType]crypto.LocalState)
+        localStateMap[utils.ECDSA] = syntheticLocalState
+        // NOTE: EdDSA not included - EdDSA uses different derivation and chain code
+        
+        // Create synthetic TempLocalState
+        syntheticSecret := utils.TempLocalState{
+                FileName:   "dkls_synthetic_state",
+                LocalState: localStateMap,
+                SchemeType: utils.DKLS,
+        }
+        
+        return []utils.TempLocalState{syntheticSecret}, nil
+}
+
+// processDKLSKeysWithUnifiedPipeline processes DKLS keys using the same pipeline as GG20
+// but bypasses TSS reconstruction since DKLS gives us reconstructed keys directly
+func processDKLSKeysWithUnifiedPipeline(ctx FileProcessingContext, result *ProcessResult) error {
+        // Create synthetic local state for chain code access
+        syntheticSecrets, err := createSyntheticTempLocalStateFromDKLS(ctx)
+        if err != nil {
+                return fmt.Errorf("failed to create synthetic local state: %w", err)
+        }
+        
+        // Process ECDSA keys if we have the required data
+        if ctx.PrivateKeyHex != "" && ctx.RootChainCodeHex != "" {
+                ecdsaPrivateKeyBytes, err := hex.DecodeString(ctx.PrivateKeyHex)
+                if err != nil {
+                        return fmt.Errorf("failed to decode ECDSA private key: %w", err)
+                }
+                
+                // Convert to big.Int for compatibility with processor
+                ecdsaPrivateKeyBigInt := new(big.Int).SetBytes(ecdsaPrivateKeyBytes)
+                
+                // Use the ECDSA processor directly (bypass TSS reconstruction)
+                processor := &ECDSAKeyProcessor{}
+                ecdsaResult, err := processor.ProcessTSSKey(ecdsaPrivateKeyBigInt, syntheticSecrets)
+                if err != nil {
+                        log.Printf("ECDSA processing failed: %v", err)
+                } else {
+                        result.RootKeyInfo = ecdsaResult.RootKeyInfo
+                        result.PublicKeys.ECDSA = ecdsaResult.RootKeyInfo.HexPubKeyECDSA
+                        result.CoinKeys = append(result.CoinKeys, ecdsaResult.CoinKeys...)
+                }
+        }
+        
+        // Process EdDSA keys - ONLY if we have valid EdDSA data from DKLS vault
+        // CRITICAL: Never fabricate EdDSA keys from ECDSA keys (different curves, wrong addresses)
         if ctx.EdDSAPublicKeyHex != "" {
+                // For now, DKLS EdDSA processing requires both private and public keys
+                // TODO: Implement proper EdDSA private key extraction from DKLS vault
+                log.Printf("DKLS EdDSA processing not yet implemented - EdDSA public key provided but private key extraction from DKLS vault is missing")
+                log.Printf("EdDSA chains (Solana, Sui, TON) will not appear in DKLS output until proper EdDSA key extraction is implemented")
+                
+                // Set the public key for display but don't generate incorrect addresses
                 result.PublicKeys.EdDSA = ctx.EdDSAPublicKeyHex
+        } else {
+                log.Printf("No EdDSA keys available in DKLS vault - EdDSA chains (Solana, Sui, TON) will not be processed")
+                log.Printf("This is expected behavior - DKLS vaults may not contain EdDSA key material")
         }
-
-        // Combine ECDSA and EdDSA keys into a single CoinKeys array
-        result.CoinKeys = append(result.CoinKeys, deriveResult.ECDSAKeys...)
-        result.CoinKeys = append(result.CoinKeys, deriveResult.EdDSAKeys...)
-
+        
         return nil
 }
 
