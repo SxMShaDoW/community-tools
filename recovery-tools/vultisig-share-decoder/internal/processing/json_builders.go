@@ -147,23 +147,15 @@ func ProcessRootKeyForCoinsJSON(rootPrivateKeyBytes []byte, rootChainCodeBytes [
 func ProcessEdDSAKeyForCoinsJSON(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, coinConfigs []EnhancedCoinConfig) ([]CoinKeyInfo, error) {
         var coinKeys []CoinKeyInfo
 
-        // Process each EdDSA coin configuration using the appropriate JSON function
+        // Process each EdDSA coin configuration using the handler-based approach
         for _, coin := range coinConfigs {
-                var coinKeyInfo CoinKeyInfo
-                var err error
-
-                // Use the appropriate JSON handler based on coin name
-                switch coin.Name {
-                case "solana":
-                        coinKeyInfo, err = processSolana(eddsaPrivateKeyBytes, eddsaPublicKeyBytes, coin.DerivePath)
-                case "sui":
-                        coinKeyInfo, err = processSui(eddsaPrivateKeyBytes, eddsaPublicKeyBytes, coin.DerivePath)
-                case "ton":
-                        coinKeyInfo, err = processTon(eddsaPrivateKeyBytes, eddsaPublicKeyBytes, coin.DerivePath)
-                default:
-                        return nil, fmt.Errorf("unsupported EdDSA coin: %s", coin.Name)
+                // Check if EdDSAHandler is available
+                if coin.EdDSAHandler == nil {
+                        return nil, fmt.Errorf("no EdDSA handler available for coin: %s", coin.Name)
                 }
 
+                // Use the coin's EdDSAHandler instead of switch statement
+                coinKeyInfo, err := coin.EdDSAHandler(eddsaPrivateKeyBytes, eddsaPublicKeyBytes, coin)
                 if err != nil {
                         return nil, fmt.Errorf("error processing %s keys: %w", coin.Name, err)
                 }
