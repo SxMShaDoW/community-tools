@@ -8,7 +8,6 @@ import (
         "syscall/js"
         "os"
         "io"
-        "encoding/hex"
         "strings"
         "main/internal/utils"
         "main/internal/processing"
@@ -70,50 +69,55 @@ func main() {
         
         rootPrivateKeyHex := args[0].String()
         rootChainCodeHex := args[1].String()
-
-        // Decode hex strings
-        rootPrivateKeyBytes, err := hex.DecodeString(rootPrivateKeyHex)
-        if err != nil {
-            return fmt.Sprintf("Error decoding private key hex: %v", err)
-        }
-
-        rootChainCodeBytes, err := hex.DecodeString(rootChainCodeHex)
-        if err != nil {
-            return fmt.Sprintf("Error decoding chain code hex: %v", err)
-        }
-
-        var outputBuilder strings.Builder
-
-        // Get ECDSA supported coins and process them
-        ecdsaCoins := processing.GetSupportedCoins()
-        err = processing.ProcessRootKeyForCoins(rootPrivateKeyBytes, rootChainCodeBytes, ecdsaCoins, &outputBuilder)
-        if err != nil {
-            return fmt.Sprintf("Error processing ECDSA keys: %v", err)
-        }
-
-        // Check if EdDSA keys are available (args[2] and args[3] should be EdDSA private and public key)
+        
+        // Get EdDSA keys if available (args[2] and args[3] should be EdDSA private and public key)
+        eddsaPrivateKeyHex := ""
+        eddsaPublicKeyHex := ""
         if len(args) >= 4 && !args[2].IsNull() && !args[3].IsNull() {
-            eddsaPrivateKeyHex := args[2].String()
-            eddsaPublicKeyHex := args[3].String()
-            
-            eddsaPrivateKeyBytes, err := hex.DecodeString(eddsaPrivateKeyHex)
-            if err != nil {
-                return fmt.Sprintf("Error decoding EdDSA private key hex: %v", err)
-            }
-            
-            eddsaPublicKeyBytes, err := hex.DecodeString(eddsaPublicKeyHex)
-            if err != nil {
-                return fmt.Sprintf("Error decoding EdDSA public key hex: %v", err)
-            }
-
-            // Get EdDSA coins and process them
-            eddsaCoins := processing.GetEdDSACoins()
-            err = processing.ProcessEdDSAKeyForCoins(eddsaPrivateKeyBytes, eddsaPublicKeyBytes, eddsaCoins, &outputBuilder)
-            if err != nil {
-                return fmt.Sprintf("Error processing EdDSA keys: %v", err)
-            }
+            eddsaPrivateKeyHex = args[2].String()
+            eddsaPublicKeyHex = args[3].String()
         }
 
+        // Use the JSON-based processing approach
+        result, err := processing.DeriveAndShowKeysJSON(rootPrivateKeyHex, rootChainCodeHex, eddsaPrivateKeyHex, eddsaPublicKeyHex)
+        if err != nil {
+            return fmt.Sprintf("Error: %v", err)
+        }
+        
+        // Convert the structured result to human-readable string format for backward compatibility
+        var outputBuilder strings.Builder
+        
+        // Add root key information
+        outputBuilder.WriteString(fmt.Sprintf("\nhex encoded root pubkey(ECDSA): %s\n", result.RootKeyInfo.HexPubKeyECDSA))
+        outputBuilder.WriteString(fmt.Sprintf("\nhex encoded root privkey(ECDSA): %s\n", result.RootKeyInfo.HexPrivKeyECDSA))
+        outputBuilder.WriteString(fmt.Sprintf("\nchaincode: %s\n", result.RootKeyInfo.ChainCode))
+        outputBuilder.WriteString(fmt.Sprintf("\nextended private key full: %s\n", result.RootKeyInfo.ExtendedPrivKey))
+        
+        // Add ECDSA coin key information
+        for _, coinKey := range result.ECDSAKeys {
+            outputBuilder.WriteString(fmt.Sprintf("\nRecovering %s key....\n", coinKey.Name))
+            outputBuilder.WriteString(fmt.Sprintf("\nprivate key for %s: %s\n", coinKey.Name, coinKey.ExtendedPrivKey))
+            outputBuilder.WriteString(fmt.Sprintf("\nhex encoded private key for %s:%s\n", coinKey.Name, coinKey.HexPrivateKey))
+            outputBuilder.WriteString(fmt.Sprintf("\nhex encoded public key for %s:%s\n", coinKey.Name, coinKey.HexPublicKey))
+            if coinKey.Address != "" {
+                outputBuilder.WriteString(fmt.Sprintf("\naddress:%s\n", coinKey.Address))
+            }
+            if coinKey.WIFPrivateKey != "" {
+                outputBuilder.WriteString(fmt.Sprintf("\nWIF private key: %s\n", coinKey.WIFPrivateKey))
+            }
+        }
+        
+        // Add EdDSA coin key information
+        for _, coinKey := range result.EdDSAKeys {
+            outputBuilder.WriteString(fmt.Sprintf("\nRecovering %s key....\n", coinKey.Name))
+            outputBuilder.WriteString(fmt.Sprintf("\nhex encoded private key for %s:%s\n", coinKey.Name, coinKey.HexPrivateKey))
+            outputBuilder.WriteString(fmt.Sprintf("\nhex encoded public key for %s:%s\n", coinKey.Name, coinKey.HexPublicKey))
+            outputBuilder.WriteString(fmt.Sprintf("\naddress:%s\n", coinKey.Address))
+            if coinKey.AdditionalInfo != "" {
+                outputBuilder.WriteString(fmt.Sprintf("\nAdditional info: %s\n", coinKey.AdditionalInfo))
+            }
+        }
+        
         return outputBuilder.String()
     }))
 
@@ -127,36 +131,41 @@ func main() {
         rootChainCodeHex := args[1].String()
         coinType := args[2].String()
 
-        // Decode hex strings
-        rootPrivateKeyBytes, err := hex.DecodeString(rootPrivateKeyHex)
+        // Use the JSON-based processing approach to get all keys, then filter for the specific coin
+        result, err := processing.DeriveAndShowKeysJSON(rootPrivateKeyHex, rootChainCodeHex, "", "")
         if err != nil {
-            return fmt.Sprintf("Error decoding private key hex: %v", err)
+            return fmt.Sprintf("Error: %v", err)
         }
-
-        rootChainCodeBytes, err := hex.DecodeString(rootChainCodeHex)
-        if err != nil {
-            return fmt.Sprintf("Error decoding chain code hex: %v", err)
-        }
-
-        // Find the specific coin configuration
-        supportedCoins := processing.GetSupportedCoins()
-        var targetCoin *processing.CoinConfig
-        for _, coin := range supportedCoins {
-            if coin.Name == coinType {
-                targetCoin = &coin
+        
+        // Find the specific coin in the results
+        var targetCoinKey *processing.CoinKeyInfo
+        for _, coinKey := range result.ECDSAKeys {
+            if coinKey.Name == coinType {
+                targetCoinKey = &coinKey
                 break
             }
         }
-
-        if targetCoin == nil {
+        
+        if targetCoinKey == nil {
             return fmt.Sprintf("Error: unsupported coin type: %s", coinType)
         }
 
-        // Process the root key for the specific coin
+        // Convert the specific coin key to string format for backward compatibility
         var outputBuilder strings.Builder
-        err = processing.ProcessRootKeyForCoins(rootPrivateKeyBytes, rootChainCodeBytes, []processing.CoinConfig{*targetCoin}, &outputBuilder)
-        if err != nil {
-            return fmt.Sprintf("Error processing key for %s: %v", coinType, err)
+        outputBuilder.WriteString(fmt.Sprintf("\nhex encoded root pubkey(ECDSA): %s\n", result.RootKeyInfo.HexPubKeyECDSA))
+        outputBuilder.WriteString(fmt.Sprintf("\nhex encoded root privkey(ECDSA): %s\n", result.RootKeyInfo.HexPrivKeyECDSA))
+        outputBuilder.WriteString(fmt.Sprintf("\nchaincode: %s\n", result.RootKeyInfo.ChainCode))
+        outputBuilder.WriteString(fmt.Sprintf("\nextended private key full: %s\n", result.RootKeyInfo.ExtendedPrivKey))
+        
+        outputBuilder.WriteString(fmt.Sprintf("\nRecovering %s key....\n", targetCoinKey.Name))
+        outputBuilder.WriteString(fmt.Sprintf("\nprivate key for %s: %s\n", targetCoinKey.Name, targetCoinKey.ExtendedPrivKey))
+        outputBuilder.WriteString(fmt.Sprintf("\nhex encoded private key for %s:%s\n", targetCoinKey.Name, targetCoinKey.HexPrivateKey))
+        outputBuilder.WriteString(fmt.Sprintf("\nhex encoded public key for %s:%s\n", targetCoinKey.Name, targetCoinKey.HexPublicKey))
+        if targetCoinKey.Address != "" {
+            outputBuilder.WriteString(fmt.Sprintf("\naddress:%s\n", targetCoinKey.Address))
+        }
+        if targetCoinKey.WIFPrivateKey != "" {
+            outputBuilder.WriteString(fmt.Sprintf("\nWIF private key: %s\n", targetCoinKey.WIFPrivateKey))
         }
 
         return outputBuilder.String()
