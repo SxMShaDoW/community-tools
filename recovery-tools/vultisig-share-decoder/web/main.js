@@ -812,6 +812,36 @@ async function processDKLSWithJSON(files, passwords, fileNames) {
             window.keyAnalysisDebug.testMultipleSessionApproach(keyshares, partyIds);
         }
 
+        // 🧪 EXPERIMENT: Test EdDSA extraction methods
+        if (window.eddsaExtractionTest && keyshares.length >= 2) {
+            const partyIds = keyshares.map((_, index) => `party${index + 1}`);
+            
+            console.log("🚀 === STARTING EDDSA EXTRACTION EXPERIMENTS ===");
+            
+            // Test 1: Alternative session types
+            const sessionResults = await window.eddsaExtractionTest.testAlternativeSessionTypes(keyshares, partyIds);
+            console.log("📊 Session type test results:", sessionResults);
+            
+            // Test 2: Finish method parameters
+            const finishResults = await window.eddsaExtractionTest.testFinishMethodParameters(keyshares, partyIds);
+            if (finishResults) {
+                console.log("🎉 BREAKTHROUGH: Found EdDSA extraction method!");
+                console.log(`📏 EdDSA key length: ${finishResults.length} bytes`);
+                
+                // If we found EdDSA extraction, use it!
+                const eddsaPrivateKeyHex = Array.from(finishResults).map(b => b.toString(16).padStart(2, '0')).join('');
+                console.log(`🔑 EdDSA Private Key: ${eddsaPrivateKeyHex}`);
+                
+                // TODO: Pass both ECDSA and EdDSA private keys to processing
+            }
+            
+            // Test 3: Separate EdDSA extraction methods
+            const separateResults = await window.eddsaExtractionTest.testSeparateEdDSAExtraction(keyshares, partyIds);
+            console.log("📊 Separate EdDSA extraction results:", separateResults);
+            
+            console.log("🏁 === EDDSA EXTRACTION EXPERIMENTS COMPLETE ===");
+        }
+
         // Now call the new ProcessDKLSFileContentJSON function with extracted keys
         debugLog("Calling ProcessDKLSFileContentJSON function...");
         
