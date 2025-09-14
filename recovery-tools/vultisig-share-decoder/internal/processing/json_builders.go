@@ -118,44 +118,51 @@ func ProcessRootKeyForCoinsJSON(rootPrivateKeyBytes []byte, rootChainCodeBytes [
 
         var coinKeys []CoinKeyInfo
 
-        // Process each coin configuration using the appropriate JSON function
+        // Get enhanced coin configurations for more flexible handling
+        enhancedCoins := GetEnhancedECDSACoins()
+        
+        // Create a map for quick lookup of enhanced configs by name
+        enhancedConfigMap := make(map[string]EnhancedCoinConfig)
+        for _, enhancedCoin := range enhancedCoins {
+                enhancedConfigMap[enhancedCoin.Name] = enhancedCoin
+        }
+
+        // Process each coin configuration using the appropriate handler
         for _, coin := range coinConfigs {
                 key, err := GetDerivedPrivateKeys(coin.DerivePath, extendedPrivateKey)
                 if err != nil {
                         return rootKeyInfo, nil, fmt.Errorf("error deriving private key for %s: %w", coin.Name, err)
                 }
 
-                // Use the appropriate JSON handler based on coin name
+                // Use enhanced config if available, otherwise fall back to legacy switch
                 var coinKeyInfo CoinKeyInfo
-                switch coin.Name {
-                case "bitcoin":
-                        coinKeyInfo, err = ShowBitcoinKeyJSON(key, coin.DerivePath)
-                case "bitcoinCash":
-                        coinKeyInfo, err = ShowBitcoinCashKeyJSON(key, coin.DerivePath)
-                case "dogecoin":
-                        coinKeyInfo, err = ShowDogecoinKeyJSON(key, coin.DerivePath)
-                case "litecoin":
-                        coinKeyInfo, err = ShowLitecoinKeyJSON(key, coin.DerivePath)
-                case "ethereum":
-                        coinKeyInfo, err = ShowEthereumKeyJSON(key, coin.DerivePath)
-                case "tron":
-                        coinKeyInfo, err = ShowTronKeyJSON(key, coin.DerivePath)
-                case "thorchain":
-                        coinKeyInfo, err = ShowThorchainKeyJSON(key, coin.DerivePath)
-                case "mayachain":
-                        coinKeyInfo, err = ShowMayachainKeyJSON(key, coin.DerivePath)
-                case "atom":
-                        coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "cosmos", "Atom", coin.DerivePath)
-                case "kujira":
-                        coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "kujira", "Kujira", coin.DerivePath)
-                case "dydx":
-                        coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "dydx", "dYdX", coin.DerivePath)
-                case "terra-classic":
-                        coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "terra", "Terra Classic", coin.DerivePath)
-                case "terra":
-                        coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "terra", "Terra", coin.DerivePath)
-                default:
-                        return rootKeyInfo, nil, fmt.Errorf("unsupported coin: %s", coin.Name)
+                if enhancedConfig, exists := enhancedConfigMap[coin.Name]; exists && enhancedConfig.Handler != nil {
+                        // Use the enhanced configuration handler
+                        coinKeyInfo, err = enhancedConfig.Handler(key, enhancedConfig)
+                } else {
+                        // Fall back to legacy handler switch for coins not yet migrated
+                        switch coin.Name {
+                        case "ethereum":
+                                coinKeyInfo, err = ShowEthereumKeyJSON(key, coin.DerivePath)
+                        case "tron":
+                                coinKeyInfo, err = ShowTronKeyJSON(key, coin.DerivePath)
+                        case "thorchain":
+                                coinKeyInfo, err = ShowThorchainKeyJSON(key, coin.DerivePath)
+                        case "mayachain":
+                                coinKeyInfo, err = ShowMayachainKeyJSON(key, coin.DerivePath)
+                        case "atom":
+                                coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "cosmos", "Atom", coin.DerivePath)
+                        case "kujira":
+                                coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "kujira", "Kujira", coin.DerivePath)
+                        case "dydx":
+                                coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "dydx", "dYdX", coin.DerivePath)
+                        case "terra-classic":
+                                coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "terra", "Terra Classic", coin.DerivePath)
+                        case "terra":
+                                coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "terra", "Terra", coin.DerivePath)
+                        default:
+                                return rootKeyInfo, nil, fmt.Errorf("unsupported coin: %s", coin.Name)
+                        }
                 }
 
                 if err != nil {

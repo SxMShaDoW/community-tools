@@ -219,6 +219,7 @@ func GetEnhancedECDSACoins() []EnhancedCoinConfig {
                                 "network":     "mainnet",
                                 "compressed":  true,
                         },
+                        Handler:    UTXOHandler,
                 },
                 {
                         Name:       "bitcoinCash",
@@ -229,6 +230,7 @@ func GetEnhancedECDSACoins() []EnhancedCoinConfig {
                                 "network":     "mainnet",
                                 "compressed":  true,
                         },
+                        Handler:    UTXOHandler,
                 },
                 {
                         Name:       "dogecoin",
@@ -239,6 +241,7 @@ func GetEnhancedECDSACoins() []EnhancedCoinConfig {
                                 "network":     "mainnet",
                                 "compressed":  true,
                         },
+                        Handler:    UTXOHandler,
                 },
                 {
                         Name:       "litecoin",
@@ -249,6 +252,7 @@ func GetEnhancedECDSACoins() []EnhancedCoinConfig {
                                 "network":     "mainnet",
                                 "compressed":  true,
                         },
+                        Handler:    UTXOHandler,
                 },
                 // Cosmos Family
                 {

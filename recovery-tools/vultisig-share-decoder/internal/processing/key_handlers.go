@@ -43,6 +43,116 @@ func GetDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.Extende
         return key, nil
 }
 
+// UTXOHandler unified handler for all UTXO-family cryptocurrencies (Bitcoin, Bitcoin Cash, Dogecoin, Litecoin)
+func UTXOHandler(extendedKey *hdkeychain.ExtendedKey, config EnhancedCoinConfig) (CoinKeyInfo, error) {
+        // Extract keys using helper function
+        keyPair, err := ExtractECKeys(extendedKey)
+        if err != nil {
+                return CoinKeyInfo{}, fmt.Errorf("failed to extract keys for %s: %w", config.Name, err)
+        }
+
+        // Initialize builder with common fields
+        builder := InitializeCoinBuilder(config, extendedKey, keyPair)
+        builder.SetNetworkParams("mainnet")
+
+        // Branch based on coin type for network-specific operations
+        switch config.Name {
+        case "bitcoin":
+                return processBitcoin(builder, keyPair)
+        case "bitcoinCash":
+                return processBitcoinCash(builder, keyPair)
+        case "dogecoin":
+                return processDogecoin(builder, keyPair)
+        case "litecoin":
+                return processLitecoin(builder, keyPair)
+        default:
+                return builder.Build(), fmt.Errorf("unsupported UTXO coin: %s", config.Name)
+        }
+}
+
+// processBitcoin handles Bitcoin-specific address and WIF generation
+func processBitcoin(builder *CoinKeyBuilder, keyPair *ECKeyPair) (CoinKeyInfo, error) {
+        net := &chaincfg.MainNetParams
+        
+        wif, err := btcutil.NewWIF(keyPair.PrivateKey, net, true)
+        if err != nil {
+                return builder.Build(), err
+        }
+
+        addressPubKey, err := btcutil.NewAddressWitnessPubKeyHash(btcutil.Hash160(keyPair.PublicKey.SerializeCompressed()), net)
+        if err != nil {
+                return builder.Build(), err
+        }
+
+        builder.SetAddress(addressPubKey.EncodeAddress())
+        builder.SetWIFPrivateKey(wif.String())
+        builder.SetAdditionalInfo("p2wpkh")
+        
+        return builder.Build(), nil
+}
+
+// processBitcoinCash handles Bitcoin Cash-specific address and WIF generation
+func processBitcoinCash(builder *CoinKeyBuilder, keyPair *ECKeyPair) (CoinKeyInfo, error) {
+        net := &bchChainCfg.MainNetParams
+        
+        bchNonHardenedPrivKey, _ := bchec.PrivKeyFromBytes(bchec.S256(), keyPair.PrivateKey.Serialize())
+        wif, err := bchutil.NewWIF(bchNonHardenedPrivKey, net, true)
+        if err != nil {
+                return builder.Build(), err
+        }
+
+        addressPubKey, err := bchutil.NewAddressPubKeyHash(bchutil.Hash160(keyPair.PublicKey.SerializeCompressed()), net)
+        if err != nil {
+                return builder.Build(), err
+        }
+
+        builder.SetAddress(addressPubKey.EncodeAddress())
+        builder.SetWIFPrivateKey(wif.String())
+        
+        return builder.Build(), nil
+}
+
+// processDogecoin handles Dogecoin-specific address and WIF generation
+func processDogecoin(builder *CoinKeyBuilder, keyPair *ECKeyPair) (CoinKeyInfo, error) {
+        net := &dogechaincfg.MainNetParams
+        
+        dogutilNonHardenedPrivKey, _ := dogec.PrivKeyFromBytes(dogec.S256(), keyPair.PrivateKey.Serialize())
+        wif, err := dogutil.NewWIF(dogutilNonHardenedPrivKey, net, true)
+        if err != nil {
+                return builder.Build(), err
+        }
+
+        addressPubKey, err := dogutil.NewAddressPubKeyHash(dogutil.Hash160(keyPair.PublicKey.SerializeCompressed()), net)
+        if err != nil {
+                return builder.Build(), err
+        }
+
+        builder.SetAddress(addressPubKey.EncodeAddress())
+        builder.SetWIFPrivateKey(wif.String())
+        
+        return builder.Build(), nil
+}
+
+// processLitecoin handles Litecoin-specific address and WIF generation
+func processLitecoin(builder *CoinKeyBuilder, keyPair *ECKeyPair) (CoinKeyInfo, error) {
+        net := &ltcchaincfg.MainNetParams
+        
+        wif, err := ltcutil.NewWIF(keyPair.PrivateKey, net, true)
+        if err != nil {
+                return builder.Build(), err
+        }
+
+        addressPubKey, err := ltcutil.NewAddressWitnessPubKeyHash(ltcutil.Hash160(keyPair.PublicKey.SerializeCompressed()), net)
+        if err != nil {
+                return builder.Build(), err
+        }
+
+        builder.SetAddress(addressPubKey.EncodeAddress())
+        builder.SetWIFPrivateKey(wif.String())
+        
+        return builder.Build(), nil
+}
+
 
 
 
@@ -77,144 +187,6 @@ func ShowEthereumKeyJSON(extendedPrivateKey *hdkeychain.ExtendedKey, derivePath 
         return builder.Build(), nil
 }
 
-// ShowBitcoinKeyJSON returns structured Bitcoin key information
-func ShowBitcoinKeyJSON(extendedPrivateKey *hdkeychain.ExtendedKey, derivePath string) (CoinKeyInfo, error) {
-        builder := NewCoinKeyBuilder("bitcoin", derivePath)
-        builder.SetExtendedPrivateKey(extendedPrivateKey.String())
-        
-        net := &chaincfg.MainNetParams
-        nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-        if err != nil {
-                return builder.Build(), err
-        }
-        nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-        if err != nil {
-                return builder.Build(), err
-        }
-        
-        wif, err := btcutil.NewWIF(nonHardenedPrivKey, net, true)
-        if err != nil {
-                return builder.Build(), err
-        }
-
-        addressPubKey, err := btcutil.NewAddressWitnessPubKeyHash(btcutil.Hash160(nonHardenedPubKey.SerializeCompressed()), net)
-        if err != nil {
-                return builder.Build(), err
-        }
-        
-        builder.SetHexPublicKey(hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-        builder.SetHexPrivateKey(hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-        builder.SetAddress(addressPubKey.EncodeAddress())
-        builder.SetWIFPrivateKey(wif.String())
-        builder.SetNetworkParams("mainnet")
-        builder.SetAdditionalInfo("p2wpkh")
-        
-        return builder.Build(), nil
-}
-
-// ShowBitcoinCashKeyJSON returns structured Bitcoin Cash key information
-func ShowBitcoinCashKeyJSON(extendedPrivateKey *hdkeychain.ExtendedKey, derivePath string) (CoinKeyInfo, error) {
-        builder := NewCoinKeyBuilder("bitcoinCash", derivePath)
-        builder.SetExtendedPrivateKey(extendedPrivateKey.String())
-        
-        net := &bchChainCfg.MainNetParams
-        nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-        if err != nil {
-                return builder.Build(), err
-        }
-        nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-        if err != nil {
-                return builder.Build(), err
-        }
-        
-        bchNonHardenedPrivKey, _ := bchec.PrivKeyFromBytes(bchec.S256(), nonHardenedPrivKey.Serialize())
-        wif, err := bchutil.NewWIF(bchNonHardenedPrivKey, net, true)
-        if err != nil {
-                return builder.Build(), err
-        }
-
-        addressPubKey, err := bchutil.NewAddressPubKeyHash(bchutil.Hash160(nonHardenedPubKey.SerializeCompressed()), net)
-        if err != nil {
-                return builder.Build(), err
-        }
-        
-        builder.SetHexPublicKey(hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-        builder.SetHexPrivateKey(hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-        builder.SetAddress(addressPubKey.EncodeAddress())
-        builder.SetWIFPrivateKey(wif.String())
-        builder.SetNetworkParams("mainnet")
-        
-        return builder.Build(), nil
-}
-
-// ShowDogecoinKeyJSON returns structured Dogecoin key information
-func ShowDogecoinKeyJSON(extendedPrivateKey *hdkeychain.ExtendedKey, derivePath string) (CoinKeyInfo, error) {
-        builder := NewCoinKeyBuilder("dogecoin", derivePath)
-        builder.SetExtendedPrivateKey(extendedPrivateKey.String())
-        
-        net := &dogechaincfg.MainNetParams
-        nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-        if err != nil {
-                return builder.Build(), err
-        }
-        nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-        if err != nil {
-                return builder.Build(), err
-        }
-        
-        dogutilNonHardenedPrivKey, _ := dogec.PrivKeyFromBytes(dogec.S256(), nonHardenedPrivKey.Serialize())
-        wif, err := dogutil.NewWIF(dogutilNonHardenedPrivKey, net, true)
-        if err != nil {
-                return builder.Build(), err
-        }
-
-        addressPubKey, err := dogutil.NewAddressPubKeyHash(dogutil.Hash160(nonHardenedPubKey.SerializeCompressed()), net)
-        if err != nil {
-                return builder.Build(), err
-        }
-        
-        builder.SetHexPublicKey(hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-        builder.SetHexPrivateKey(hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-        builder.SetAddress(addressPubKey.EncodeAddress())
-        builder.SetWIFPrivateKey(wif.String())
-        builder.SetNetworkParams("mainnet")
-        
-        return builder.Build(), nil
-}
-
-// ShowLitecoinKeyJSON returns structured Litecoin key information
-func ShowLitecoinKeyJSON(extendedPrivateKey *hdkeychain.ExtendedKey, derivePath string) (CoinKeyInfo, error) {
-        builder := NewCoinKeyBuilder("litecoin", derivePath)
-        builder.SetExtendedPrivateKey(extendedPrivateKey.String())
-        
-        net := &ltcchaincfg.MainNetParams
-        nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-        if err != nil {
-                return builder.Build(), err
-        }
-        nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-        if err != nil {
-                return builder.Build(), err
-        }
-        
-        wif, err := ltcutil.NewWIF(nonHardenedPrivKey, net, true)
-        if err != nil {
-                return builder.Build(), err
-        }
-
-        addressPubKey, err := ltcutil.NewAddressWitnessPubKeyHash(ltcutil.Hash160(nonHardenedPubKey.SerializeCompressed()), net)
-        if err != nil {
-                return builder.Build(), err
-        }
-        
-        builder.SetHexPublicKey(hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-        builder.SetHexPrivateKey(hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-        builder.SetAddress(addressPubKey.EncodeAddress())
-        builder.SetWIFPrivateKey(wif.String())
-        builder.SetNetworkParams("mainnet")
-        
-        return builder.Build(), nil
-}
 
 // CosmosLikeKeyHandlerJSON returns structured Cosmos-like chain key information
 func CosmosLikeKeyHandlerJSON(extendedPrivateKey *hdkeychain.ExtendedKey, bech32PrefixAcc string, coinName, derivePath string) (CoinKeyInfo, error) {
