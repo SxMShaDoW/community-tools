@@ -122,14 +122,15 @@ func main() {
         // args[0] = file contents (array)
         // args[1] = passwords (array)
         // args[2] = filenames (array)
-        // args[3] = privateKeyHex (string)
+        // args[3] = ecdsaPrivateKeyHex (string)
         // args[4] = rootChainCodeHex (string)
         // args[5] = eddsaPublicKeyHex (string)
+        // args[6] = eddsaPrivateKeyHex (string) - NEW!
         
-        if len(args) < 6 {
+        if len(args) < 7 {
             errorResult := processing.ProcessResult{
                 Success: false,
-                Error:   "ProcessDKLSFileContentJSON requires 6 arguments: files, passwords, filenames, privateKeyHex, rootChainCodeHex, eddsaPublicKeyHex",
+                Error:   "ProcessDKLSFileContentJSON requires 7 arguments: files, passwords, filenames, ecdsaPrivateKeyHex, rootChainCodeHex, eddsaPublicKeyHex, eddsaPrivateKeyHex",
             }
             jsonStr, _ := processing.ToJSON(errorResult)
             return jsonStr
@@ -161,12 +162,13 @@ func main() {
         }
 
         // Get the key parameters
-        privateKeyHex := args[3].String()
+        ecdsaPrivateKeyHex := args[3].String()
         rootChainCodeHex := args[4].String()
         eddsaPublicKeyHex := args[5].String()
+        eddsaPrivateKeyHex := args[6].String()
 
         // Process the DKLS files and return JSON
-        result, err := processing.ProcessDKLSFileContentJSON(fileInfos, passwords, privateKeyHex, rootChainCodeHex, eddsaPublicKeyHex)
+        result, err := processing.ProcessDKLSFileContentJSON(fileInfos, passwords, ecdsaPrivateKeyHex, rootChainCodeHex, eddsaPublicKeyHex, eddsaPrivateKeyHex)
         if err != nil {
             errorResult := processing.ProcessResult{
                 Success: false,

@@ -801,45 +801,27 @@ async function processDKLSWithJSON(files, passwords, fileNames) {
         const rootChainCodeHex = Array.from(rootChainCodeBytes).map(b => b.toString(16).padStart(2, '0')).join('');
         debugLog(`Root Chain Code: ${rootChainCodeHex}`);
 
-        // 🔍 DEBUG: Compare public keys to understand relationship
-        if (window.keyAnalysisDebug && eddsaPublicKey) {
-            window.keyAnalysisDebug.comparePublicKeys(publicKeyHex, eddsaPublicKey);
-        }
-
-        // 🔍 DEBUG: Test multiple session approach (experimental)
-        if (window.keyAnalysisDebug && keyshares.length >= 2) {
-            const partyIds = keyshares.map((_, index) => `party${index + 1}`);
-            window.keyAnalysisDebug.testMultipleSessionApproach(keyshares, partyIds);
-        }
-
-        // 🧪 EXPERIMENT: Test EdDSA extraction methods
-        if (window.eddsaExtractionTest && keyshares.length >= 2) {
-            const partyIds = keyshares.map((_, index) => `party${index + 1}`);
-            
-            console.log("🚀 === STARTING EDDSA EXTRACTION EXPERIMENTS ===");
-            
-            // Test 1: Alternative session types
-            const sessionResults = await window.eddsaExtractionTest.testAlternativeSessionTypes(keyshares, partyIds);
-            console.log("📊 Session type test results:", sessionResults);
-            
-            // Test 2: Finish method parameters
-            const finishResults = await window.eddsaExtractionTest.testFinishMethodParameters(keyshares, partyIds);
-            if (finishResults) {
-                console.log("🎉 BREAKTHROUGH: Found EdDSA extraction method!");
-                console.log(`📏 EdDSA key length: ${finishResults.length} bytes`);
+        // 🎯 IMPLEMENT: Extract EdDSA private key using discovered method
+        debugLog("Extracting EdDSA private key using session.finish('eddsa')...");
+        let eddsaPrivateKeyHex = '';
+        
+        try {
+            const eddsaPrivateKeyBytes = session.finish('eddsa');
+            if (eddsaPrivateKeyBytes && eddsaPrivateKeyBytes.length > 0) {
+                eddsaPrivateKeyHex = Array.from(eddsaPrivateKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+                debugLog(`✅ Successfully extracted EdDSA private key: ${eddsaPrivateKeyHex}... (${eddsaPrivateKeyBytes.length} bytes)`);
                 
-                // If we found EdDSA extraction, use it!
-                const eddsaPrivateKeyHex = Array.from(finishResults).map(b => b.toString(16).padStart(2, '0')).join('');
-                console.log(`🔑 EdDSA Private Key: ${eddsaPrivateKeyHex}`);
-                
-                // TODO: Pass both ECDSA and EdDSA private keys to processing
+                // Check if EdDSA key is different from ECDSA key
+                if (eddsaPrivateKeyHex === privateKeyHex) {
+                    debugLog("⚠️  WARNING: EdDSA and ECDSA private keys are identical");
+                } else {
+                    debugLog("✅ EdDSA private key is different from ECDSA private key - extraction successful!");
+                }
+            } else {
+                debugLog("⚠️  EdDSA extraction returned empty key - EdDSA not available in this vault");
             }
-            
-            // Test 3: Separate EdDSA extraction methods
-            const separateResults = await window.eddsaExtractionTest.testSeparateEdDSAExtraction(keyshares, partyIds);
-            console.log("📊 Separate EdDSA extraction results:", separateResults);
-            
-            console.log("🏁 === EDDSA EXTRACTION EXPERIMENTS COMPLETE ===");
+        } catch (eddsaFinishError) {
+            debugLog(`⚠️  EdDSA extraction failed: ${eddsaFinishError.message} - EdDSA keys not available`);
         }
 
         // Now call the new ProcessDKLSFileContentJSON function with extracted keys
@@ -850,7 +832,7 @@ async function processDKLSWithJSON(files, passwords, fileNames) {
             throw new Error("ProcessDKLSFileContentJSON function not available. Please reload the page.");
         }
 
-        const jsonResult = window.ProcessDKLSFileContentJSON(files, passwords, fileNames, privateKeyHex, rootChainCodeHex, eddsaPublicKey);
+        const jsonResult = window.ProcessDKLSFileContentJSON(files, passwords, fileNames, privateKeyHex, rootChainCodeHex, eddsaPublicKey, eddsaPrivateKeyHex);
         debugLog(`ProcessDKLSFileContentJSON result: ${jsonResult}`);
         
         let resultData;

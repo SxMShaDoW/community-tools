@@ -27,9 +27,10 @@ type FileProcessingContext struct {
         Source          utils.InputSource
         
         // DKLS-specific fields
-        PrivateKeyHex    string
-        RootChainCodeHex string
+        PrivateKeyHex     string
+        RootChainCodeHex  string
         EdDSAPublicKeyHex string
+        EdDSAPrivateKeyHex string // NEW: EdDSA private key from DKLS extraction
 }
 
 // FileProcessingStrategy defines the interface for different vault processing strategies
@@ -406,19 +407,33 @@ func processDKLSKeysWithUnifiedPipeline(ctx FileProcessingContext, result *Proce
                 }
         }
         
-        // Process EdDSA keys - ONLY if we have valid EdDSA data from DKLS vault
-        // CRITICAL: Never fabricate EdDSA keys from ECDSA keys (different curves, wrong addresses)
-        if ctx.EdDSAPublicKeyHex != "" {
-                // For now, DKLS EdDSA processing requires both private and public keys
-                // TODO: Implement proper EdDSA private key extraction from DKLS vault
-                log.Printf("DKLS EdDSA processing not yet implemented - EdDSA public key provided but private key extraction from DKLS vault is missing")
-                log.Printf("EdDSA chains (Solana, Sui, TON) will not appear in DKLS output until proper EdDSA key extraction is implemented")
+        // Process EdDSA keys - NOW IMPLEMENTED with proper EdDSA private key extraction
+        if ctx.EdDSAPublicKeyHex != "" && ctx.EdDSAPrivateKeyHex != "" {
+                log.Printf("✅ DKLS EdDSA processing - both EdDSA public and private keys available")
                 
-                // Set the public key for display but don't generate incorrect addresses
+                eddsaPrivateKeyBytes, err := hex.DecodeString(ctx.EdDSAPrivateKeyHex)
+                if err != nil {
+                        log.Printf("❌ Failed to decode EdDSA private key: %v", err)
+                } else {
+                        // Convert to big.Int for compatibility with processor
+                        eddsaPrivateKeyBigInt := new(big.Int).SetBytes(eddsaPrivateKeyBytes)
+                        
+                        // Use the EdDSA processor directly (bypass TSS reconstruction)
+                        processor := &EdDSAKeyProcessor{}
+                        eddsaResult, err := processor.ProcessTSSKey(eddsaPrivateKeyBigInt, syntheticSecrets)
+                        if err != nil {
+                                log.Printf("❌ EdDSA processing failed: %v", err)
+                        } else {
+                                log.Printf("✅ EdDSA processing successful - EdDSA chains (Solana, Sui, TON) now available!")
+                                result.PublicKeys.EdDSA = ctx.EdDSAPublicKeyHex
+                                result.CoinKeys = append(result.CoinKeys, eddsaResult.CoinKeys...)
+                        }
+                }
+        } else if ctx.EdDSAPublicKeyHex != "" {
+                log.Printf("⚠️  DKLS EdDSA public key available but private key missing - EdDSA extraction may have failed")
                 result.PublicKeys.EdDSA = ctx.EdDSAPublicKeyHex
         } else {
-                log.Printf("No EdDSA keys available in DKLS vault - EdDSA chains (Solana, Sui, TON) will not be processed")
-                log.Printf("This is expected behavior - DKLS vaults may not contain EdDSA key material")
+                log.Printf("ℹ️  No EdDSA keys in DKLS vault - EdDSA chains (Solana, Sui, TON) not available")
         }
         
         return nil
@@ -528,15 +543,16 @@ func ProcessFileContentJSON(fileInfos []utils.FileInfo, passwords []string, sour
 }
 
 // ProcessDKLSFileContentJSON processes DKLS vault files and returns structured JSON data using unified pipeline
-func ProcessDKLSFileContentJSON(fileInfos []utils.FileInfo, passwords []string, privateKeyHex, rootChainCodeHex, eddsaPublicKeyHex string) (ProcessResult, error) {
+func ProcessDKLSFileContentJSON(fileInfos []utils.FileInfo, passwords []string, ecdsaPrivateKeyHex, rootChainCodeHex, eddsaPublicKeyHex, eddsaPrivateKeyHex string) (ProcessResult, error) {
         // Create context for DKLS processing
         ctx := FileProcessingContext{
-                FileInfos:         fileInfos,
-                Passwords:         passwords,
-                Source:            utils.Web, // Default source for DKLS
-                PrivateKeyHex:     privateKeyHex,
-                RootChainCodeHex:  rootChainCodeHex,
-                EdDSAPublicKeyHex: eddsaPublicKeyHex,
+                FileInfos:          fileInfos,
+                Passwords:          passwords,
+                Source:             utils.Web, // Default source for DKLS
+                PrivateKeyHex:      ecdsaPrivateKeyHex,
+                RootChainCodeHex:   rootChainCodeHex,
+                EdDSAPublicKeyHex:  eddsaPublicKeyHex,
+                EdDSAPrivateKeyHex: eddsaPrivateKeyHex, // NEW: Add EdDSA private key
         }
 
         // Configure pipeline for DKLS processing
