@@ -23,9 +23,12 @@ func ProcessFileContent(fileInfos []utils.FileInfo, passwords []string, source u
                 return "", err
         }
         
-        // Return the raw output which preserves exact backward compatibility
-        // ProcessFileContentJSON already generates this using the original GetKeys functions
-        return result.RawOutput, nil
+        // Legacy string output is no longer available - return structured data as JSON
+        jsonData, err := json.Marshal(result)
+        if err != nil {
+                return "Error converting result to JSON: " + err.Error(), err
+        }
+        return string(jsonData), nil
 }
 
 // ProcessFileContentJSON processes files and returns structured JSON data
@@ -136,11 +139,6 @@ func ProcessFileContentJSON(fileInfos []utils.FileInfo, passwords []string, sour
                 }
                 result.CoinKeys = append(result.CoinKeys, coinKeys...)
                 
-                // Also generate raw output for backward compatibility
-                var outputBuilder strings.Builder
-                if err := GetKeys(threshold, allSecret, utils.ECDSA, &outputBuilder); err == nil {
-                        result.RawOutput += outputBuilder.String()
-                }
         }
 
         // Process EdDSA keys with proper structuring
@@ -160,11 +158,6 @@ func ProcessFileContentJSON(fileInfos []utils.FileInfo, passwords []string, sour
                         }
                 }
                 
-                // Also generate raw output for backward compatibility  
-                var outputBuilder strings.Builder
-                if err := GetKeys(threshold, allSecret, utils.EdDSA, &outputBuilder); err == nil {
-                        result.RawOutput += outputBuilder.String()
-                }
         }
 
         return result, nil
@@ -319,7 +312,6 @@ func ProcessDKLSFileContentJSON(fileInfos []utils.FileInfo, passwords []string, 
         result.CoinKeys = append(result.CoinKeys, deriveResult.EdDSAKeys...)
 
         // Keep raw output for backward compatibility
-        result.RawOutput = deriveResult.RawOutput
 
         return result, nil
 }
