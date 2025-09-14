@@ -152,28 +152,32 @@ func reconstructTSSKey(vssShares vss.Shares, threshold int, curveType CurveType)
     return tssPrivateKey, nil
 }
 
+// Generic Processing Pipeline Types and Functions
 
-// ProcessECDSAKeysJSON reconstructs ECDSA private key and returns structured data
-func ProcessECDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) (*RootKeyInfo, []CoinKeyInfo, error) {
-    log.Printf("Processing ECDSA keys for JSON with threshold: %d, number of secrets: %d", threshold, len(allSecrets))
+// ProcessingResult represents the intermediate result of key processing
+type ProcessingResult struct {
+    TSSPrivateKey   *big.Int
+    RootKeyInfo     *RootKeyInfo  // Only populated for ECDSA
+    CoinKeys        []CoinKeyInfo
+}
 
-    // Validate input parameters using helper function
-    if err := validateThresholdAndSecrets(threshold, allSecrets); err != nil {
-        return nil, nil, err
-    }
+// KeyProcessor defines the interface for key-specific processing logic
+type KeyProcessor interface {
+    ProcessTSSKey(tssPrivateKey *big.Int, allSecrets []utils.TempLocalState) (*ProcessingResult, error)
+}
 
-    // Build VSS shares using unified helper function
-    vssShares, err := buildVSSShares(utils.ECDSA, threshold, allSecrets)
-    if err != nil {
-        return nil, nil, err
-    }
+// PipelineConfig configures the generic processing pipeline
+type PipelineConfig struct {
+    KeyType           utils.TssKeyType
+    CurveType         CurveType
+    KeyTypeName       string
+    Processor         KeyProcessor
+}
 
-    // Reconstruct TSS private key using helper function
-    tssPrivateKey, err := reconstructTSSKey(vssShares, threshold, CurveTypeECDSA)
-    if err != nil {
-        return nil, nil, err
-    }
-    
+// ECDSAKeyProcessor implements KeyProcessor for ECDSA keys
+type ECDSAKeyProcessor struct{}
+
+func (p *ECDSAKeyProcessor) ProcessTSSKey(tssPrivateKey *big.Int, allSecrets []utils.TempLocalState) (*ProcessingResult, error) {
     privateKey := secp256k1.PrivKeyFromBytes(tssPrivateKey.Bytes())
     publicKey := privateKey.PubKey()
 
@@ -184,7 +188,7 @@ func ProcessECDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) (*Ro
     chaincode := allSecrets[0].LocalState[utils.ECDSA].ChainCodeHex
     chaincodeBuf, err := hex.DecodeString(chaincode)
     if err != nil {
-        return nil, nil, fmt.Errorf("failed to decode chaincode: %w", err)
+        return nil, fmt.Errorf("failed to decode chaincode: %w", err)
     }
     
     // Create extended private key
@@ -231,30 +235,17 @@ func ProcessECDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) (*Ro
         coinKeys = append(coinKeys, coinInfo)
     }
 
-    return rootKeyInfo, coinKeys, nil
+    return &ProcessingResult{
+        TSSPrivateKey: tssPrivateKey,
+        RootKeyInfo:   rootKeyInfo,
+        CoinKeys:      coinKeys,
+    }, nil
 }
 
-// ProcessEdDSAKeysJSON reconstructs EdDSA private key and returns structured data
-func ProcessEdDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) ([]CoinKeyInfo, error) {
-    log.Printf("Processing EdDSA keys for JSON with threshold: %d, number of secrets: %d", threshold, len(allSecrets))
-    
-    // Validate input parameters using helper function
-    if err := validateThresholdAndSecrets(threshold, allSecrets); err != nil {
-        return nil, err
-    }
-    
-    // Build VSS shares using unified helper function
-    vssShares, err := buildVSSShares(utils.EdDSA, threshold, allSecrets)
-    if err != nil {
-        return nil, err
-    }
+// EdDSAKeyProcessor implements KeyProcessor for EdDSA keys
+type EdDSAKeyProcessor struct{}
 
-    // Reconstruct TSS private key using helper function
-    tssPrivateKey, err := reconstructTSSKey(vssShares, threshold, CurveTypeEdDSA)
-    if err != nil {
-        return nil, err
-    }
-    
+func (p *EdDSAKeyProcessor) ProcessTSSKey(tssPrivateKey *big.Int, allSecrets []utils.TempLocalState) (*ProcessingResult, error) {
     // Generate Ed25519 key pair
     tssPrivateKeyScalar := tssPrivateKey.Bytes()
     privateKey, publicKey, err := edwards.PrivKeyFromScalar(tssPrivateKeyScalar)
@@ -287,6 +278,79 @@ func ProcessEdDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) ([]C
         coinKeys = append(coinKeys, coinInfo)
     }
 
-    return coinKeys, nil
+    return &ProcessingResult{
+        TSSPrivateKey: tssPrivateKey,
+        RootKeyInfo:   nil, // EdDSA doesn't have root key info
+        CoinKeys:      coinKeys,
+    }, nil
+}
+
+// processKeysGeneric implements the generic processing pipeline
+func processKeysGeneric(threshold int, allSecrets []utils.TempLocalState, config PipelineConfig) (*ProcessingResult, error) {
+    log.Printf("Processing %s keys for JSON with threshold: %d, number of secrets: %d", config.KeyTypeName, threshold, len(allSecrets))
+
+    // Step 1: Validate input parameters
+    if err := validateThresholdAndSecrets(threshold, allSecrets); err != nil {
+        return nil, err
+    }
+
+    // Step 2: Build VSS shares
+    vssShares, err := buildVSSShares(config.KeyType, threshold, allSecrets)
+    if err != nil {
+        return nil, err
+    }
+
+    // Step 3: Reconstruct TSS private key
+    tssPrivateKey, err := reconstructTSSKey(vssShares, threshold, config.CurveType)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Step 4: Process keys using the specific processor
+    result, err := config.Processor.ProcessTSSKey(tssPrivateKey, allSecrets)
+    if err != nil {
+        return nil, err
+    }
+
+    return result, nil
+}
+
+
+// ProcessECDSAKeysJSON reconstructs ECDSA private key and returns structured data
+func ProcessECDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) (*RootKeyInfo, []CoinKeyInfo, error) {
+    // Configure pipeline for ECDSA processing
+    config := PipelineConfig{
+        KeyType:     utils.ECDSA,
+        CurveType:   CurveTypeECDSA,
+        KeyTypeName: "ECDSA",
+        Processor:   &ECDSAKeyProcessor{},
+    }
+
+    // Process keys using the generic pipeline
+    result, err := processKeysGeneric(threshold, allSecrets, config)
+    if err != nil {
+        return nil, nil, err
+    }
+
+    return result.RootKeyInfo, result.CoinKeys, nil
+}
+
+// ProcessEdDSAKeysJSON reconstructs EdDSA private key and returns structured data
+func ProcessEdDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) ([]CoinKeyInfo, error) {
+    // Configure pipeline for EdDSA processing
+    config := PipelineConfig{
+        KeyType:     utils.EdDSA,
+        CurveType:   CurveTypeEdDSA,
+        KeyTypeName: "EdDSA",
+        Processor:   &EdDSAKeyProcessor{},
+    }
+
+    // Process keys using the generic pipeline
+    result, err := processKeysGeneric(threshold, allSecrets, config)
+    if err != nil {
+        return nil, err
+    }
+
+    return result.CoinKeys, nil
 }
 
