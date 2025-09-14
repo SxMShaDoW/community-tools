@@ -232,13 +232,19 @@ func processZcash(builder *CoinKeyBuilder, keyPair *ECKeyPair) (CoinKeyInfo, err
         // Generate Zcash transparent address with two-byte prefix [0x1C, 0xB8]
         zcashAddress, err := generateZcashTransparentAddress(keyPair.PublicKey.SerializeCompressed())
         if err != nil {
+                // CRITICAL: Log the error for debugging
+                fmt.Printf("❌ ZCASH ADDRESS ERROR: %v\n", err)
                 return builder.Build(), fmt.Errorf("failed to generate Zcash address: %w", err)
         }
         
         // Additional validation: ensure address is not empty (critical for UI display)
         if zcashAddress == "" {
+                fmt.Printf("❌ ZCASH ADDRESS EMPTY\n")
                 return builder.Build(), fmt.Errorf("Zcash address generation returned empty string")
         }
+        
+        // CRITICAL: Log successful generation for debugging
+        fmt.Printf("✅ ZCASH ADDRESS GENERATED: %s\n", zcashAddress)
 
         builder.SetAddress(zcashAddress)
         builder.SetWIFPrivateKey(wif.String())

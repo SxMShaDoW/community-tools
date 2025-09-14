@@ -19,8 +19,9 @@ import { decryptWithAesGcm, fromBase64 } from './aes_gcm.js';
 // Initialize WASM modules
 const go = new Go();
 
-// Initialize main.wasm (Go WASM)
-const initMainWasm = WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+// Initialize main.wasm (Go WASM) with cache-busting
+const cacheBuster = Date.now();
+const initMainWasm = WebAssembly.instantiateStreaming(fetch(`main.wasm?v=${cacheBuster}`), go.importObject)
     .then((result) => {
         go.run(result.instance);
         debugLog("Main WASM initialized successfully");
