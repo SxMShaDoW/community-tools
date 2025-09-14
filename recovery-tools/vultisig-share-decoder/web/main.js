@@ -467,9 +467,19 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
         const privateKeyHex = Array.from(privateKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
         debugLog(`Extracted private key: ${privateKeyHex}... (${privateKeyBytes.length} bytes)`);
 
+        // 🔍 DEBUG: Analyze the session.finish() result
+        if (window.keyAnalysisDebug) {
+            window.keyAnalysisDebug.analyzeSessionFinishResult(privateKeyBytes);
+        }
+
         debugLog("Getting public key...");
         const publicKeyBytes = keyshares[0].publicKey();
         const publicKeyHex = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+        // 🔍 DEBUG: Analyze the keyshare public key
+        if (window.keyAnalysisDebug) {
+            window.keyAnalysisDebug.analyzeKeysharePublicKey(keyshares[0], 0);
+        }
 
         debugLog("Getting EdDSA public key from vault...");
         const eddsaPublicKey = vaultInfos[0] ? vaultInfos.find(v => v.publicKeyEddsa)?.publicKeyEddsa || '' : '';
@@ -764,9 +774,19 @@ async function processDKLSWithJSON(files, passwords, fileNames) {
         const privateKeyHex = Array.from(privateKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
         debugLog(`Extracted private key: ${privateKeyHex}... (${privateKeyBytes.length} bytes)`);
 
+        // 🔍 DEBUG: Analyze the session.finish() result
+        if (window.keyAnalysisDebug) {
+            window.keyAnalysisDebug.analyzeSessionFinishResult(privateKeyBytes);
+        }
+
         debugLog("Getting public key...");
         const publicKeyBytes = keyshares[0].publicKey();
         const publicKeyHex = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+        // 🔍 DEBUG: Analyze the keyshare public key
+        if (window.keyAnalysisDebug) {
+            window.keyAnalysisDebug.analyzeKeysharePublicKey(keyshares[0], 0);
+        }
 
         debugLog("Getting EdDSA public key from vault...");
         const eddsaPublicKey = vaultInfos[0] ? vaultInfos.find(v => v.publicKeyEddsa)?.publicKeyEddsa || '' : '';
@@ -780,6 +800,17 @@ async function processDKLSWithJSON(files, passwords, fileNames) {
         const rootChainCodeBytes = keyshares[0].rootChainCode();
         const rootChainCodeHex = Array.from(rootChainCodeBytes).map(b => b.toString(16).padStart(2, '0')).join('');
         debugLog(`Root Chain Code: ${rootChainCodeHex}`);
+
+        // 🔍 DEBUG: Compare public keys to understand relationship
+        if (window.keyAnalysisDebug && eddsaPublicKey) {
+            window.keyAnalysisDebug.comparePublicKeys(publicKeyHex, eddsaPublicKey);
+        }
+
+        // 🔍 DEBUG: Test multiple session approach (experimental)
+        if (window.keyAnalysisDebug && keyshares.length >= 2) {
+            const partyIds = keyshares.map((_, index) => `party${index + 1}`);
+            window.keyAnalysisDebug.testMultipleSessionApproach(keyshares, partyIds);
+        }
 
         // Now call the new ProcessDKLSFileContentJSON function with extracted keys
         debugLog("Calling ProcessDKLSFileContentJSON function...");
