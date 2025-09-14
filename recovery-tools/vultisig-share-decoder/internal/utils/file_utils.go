@@ -19,35 +19,6 @@ func ReadFileContent(fi string) ([]byte, error) {
         return os.ReadFile(fi)
 }
 
-func IsBakFile(fileName string) bool {
-        return strings.HasSuffix(fileName, ".bak") || strings.HasSuffix(fileName, ".vult")
-}
-
-// ParseVaultToProto attempts to parse vault content as protobuf, handling both GG20 and DKLS formats
-func ParseVaultToProto(content []byte) (*v1.Vault, error) {
-        // Try direct protobuf unmarshaling first
-        vault := &v1.Vault{}
-        if err := proto.Unmarshal(content, vault); err == nil && vault.Name != "" {
-                return vault, nil
-        }
-
-        // Try base64 decoding first
-        if decoded, err := base64.StdEncoding.DecodeString(string(content)); err == nil {
-                if err := proto.Unmarshal(decoded, vault); err == nil && vault.Name != "" {
-                        return vault, nil
-                }
-
-                // Try as vault container
-                var vaultContainer v1.VaultContainer
-                if err := proto.Unmarshal(decoded, &vaultContainer); err == nil {
-                        // This is an encrypted vault container, needs password
-                        return nil, fmt.Errorf("vault is encrypted and requires password")
-                }
-        }
-
-        return nil, fmt.Errorf("failed to parse vault: unrecognized format")
-}
-
 func ReadDataFileContent(inputFilePathName string) ([]byte, error) {
         filePathName, err := filepath.Abs(inputFilePathName)
         if err != nil {
@@ -68,62 +39,6 @@ func ReadDataFileContent(inputFilePathName string) ([]byte, error) {
         // File is encrypted and requires a password, but this function no longer prompts
         // The web interface handles password collection through HTML forms
         return nil, fmt.Errorf("file %s appears to be encrypted and requires a password", inputFilePathName)
-}
-
-func GetLocalStateFromBak(inputFileName string, password string, source InputSource) (map[TssKeyType]crypto.LocalState, error) {
-        filePathName, err := filepath.Abs(inputFileName)
-        if err != nil {
-                return nil, fmt.Errorf("error getting absolute path for file %s: %w", inputFileName, err)
-        }
-        _, err = os.Stat(filePathName)
-        if err != nil {
-                return nil, fmt.Errorf("error reading file %s: %w", inputFileName, err)
-        }
-        fileContent, err := ReadFileContent(filePathName)
-        if err != nil {
-                return nil, fmt.Errorf("error reading file %s: %w", inputFileName, err)
-        }
-
-        rawContent, err := base64.StdEncoding.DecodeString(string(fileContent))
-        if err != nil {
-                return nil, fmt.Errorf("error decoding file %s: %w", inputFileName, err)
-        }
-        var vaultContainer v1.VaultContainer
-        if err := proto.Unmarshal(rawContent, &vaultContainer); err != nil {
-                return nil, fmt.Errorf("error unmarshalling file %s: %w", inputFileName, err)
-        }
-
-        var decryptedVault *v1.Vault
-        if vaultContainer.IsEncrypted {
-                decryptedVault, err = DecryptVault(&vaultContainer, inputFileName, password, source)
-                if err != nil {
-                        return nil, fmt.Errorf("error decrypting file %s: %w", inputFileName, err)
-                }
-        } else {
-                vaultData, err := base64.StdEncoding.DecodeString(vaultContainer.Vault)
-                if err != nil {
-                        return nil, fmt.Errorf("failed to decode vault: %w", err)
-                }
-                var v v1.Vault
-                if err := proto.Unmarshal(vaultData, &v); err != nil {
-                        return nil, fmt.Errorf("failed to unmarshal vault: %w", err)
-                }
-                decryptedVault = &v
-        }
-
-        localStates := make(map[TssKeyType]crypto.LocalState)
-        for _, keyshare := range decryptedVault.KeyShares {
-                var localState crypto.LocalState
-                if err := json.Unmarshal([]byte(keyshare.Keyshare), &localState); err != nil {
-                        return nil, fmt.Errorf("error unmarshalling keyshare: %w", err)
-                }
-                if keyshare.PublicKey == decryptedVault.PublicKeyEcdsa {
-                        localStates[ECDSA] = localState
-                } else {
-                        localStates[EdDSA] = localState
-                }
-        }
-        return localStates, nil
 }
 
 func GetLocalStateFromBakContent(content []byte, password string, source InputSource) (map[TssKeyType]crypto.LocalState, error) {
@@ -239,56 +154,6 @@ func extractLocalStates(vault *v1.Vault) (map[TssKeyType]crypto.LocalState, erro
 func isJSONString(s string) bool {
         var js json.RawMessage
         return json.Unmarshal([]byte(s), &js) == nil
-}
-
-func GetLocalStateFromFile(file string) (map[TssKeyType]crypto.LocalState, error) {
-        var voltixBackup struct {
-                Vault struct {
-                        Keyshares []struct {
-                                Pubkey   string `json:"pubkey"`
-                                Keyshare string `json:"keyshare"`
-                        } `json:"keyshares"`
-                } `json:"vault"`
-                Version string `json:"version"`
-        }
-        fileContent, err := ReadDataFileContent(file)
-        if err != nil {
-                return nil, err
-        }
-        err = json.Unmarshal(fileContent, &voltixBackup)
-        if err != nil {
-                return nil, err
-        }
-        localStates := make(map[TssKeyType]crypto.LocalState)
-        for _, item := range voltixBackup.Vault.Keyshares {
-                var localState crypto.LocalState
-                if err := json.Unmarshal([]byte(item.Keyshare), &localState); err != nil {
-                        return nil, fmt.Errorf("error unmarshalling keyshare: %w", err)
-                }
-                if localState.ECDSALocalData.ShareID != nil {
-                        localStates[ECDSA] = localState
-                }
-                if localState.EDDSALocalData.ShareID != nil {
-                        localStates[EdDSA] = localState
-                }
-        }
-        return localStates, nil
-}
-
-func ParseVaultContent(vault *v1.Vault) (map[TssKeyType]crypto.LocalState, error) {
-        localStates := make(map[TssKeyType]crypto.LocalState)
-        for _, keyshare := range vault.KeyShares {
-                var localState crypto.LocalState
-                if err := json.Unmarshal([]byte(keyshare.Keyshare), &localState); err != nil {
-                        return nil, fmt.Errorf("error unmarshalling keyshare: %w", err)
-                }
-                if keyshare.PublicKey == vault.PublicKeyEcdsa {
-                        localStates[ECDSA] = localState
-                } else {
-                        localStates[EdDSA] = localState
-                }
-        }
-        return localStates, nil
 }
 
 func parseJSONVault(vault map[string]interface{}) (map[TssKeyType]crypto.LocalState, error) {
