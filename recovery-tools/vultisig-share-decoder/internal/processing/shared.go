@@ -45,7 +45,7 @@ func decodeAndParseVaultContainer(fileContent []byte) ([]byte, *v1.VaultContaine
 func decodeAndExtractLocalState(fileContent []byte, password string, source utils.InputSource) (map[utils.TssKeyType]crypto.LocalState, bool, error) {
         contentStr := strings.TrimSpace(string(fileContent))
         
-        decodedData, vaultContainer, err := decodeAndParseVaultContainer(fileContent)
+        decodedData, _, err := decodeAndParseVaultContainer(fileContent)
         if err != nil {
                 log.Printf("Failed to unmarshal as protobuf VaultContainer: %v", err)
                 // Fallback to direct local state parsing (GG20 format)
@@ -205,20 +205,9 @@ func ProcessDKLSFileContentJSON(fileInfos []utils.FileInfo, passwords []string, 
                 }
                 _ = password // TODO: Use password for vault decryption in future implementation
 
-                // Try to decode as base64 if it's a string
-                var vaultContainerData []byte
-                decodedData, err := base64.StdEncoding.DecodeString(contentStr)
+                // Use consolidated parsing function for DKLS files
+                _, vaultContainer, err := decodeAndParseVaultContainer(file.Content)
                 if err != nil {
-                        log.Printf("File %d is not base64 encoded, using raw data", i)
-                        vaultContainerData = file.Content
-                } else {
-                        log.Printf("File %d successfully decoded from base64", i)
-                        vaultContainerData = decodedData
-                }
-
-                // Parse as VaultContainer (DKLS vaults are typically encrypted)
-                var vaultContainer v1.VaultContainer
-                if err := proto.Unmarshal(vaultContainerData, &vaultContainer); err != nil {
                         log.Printf("Failed to unmarshal VaultContainer for file %d: %v", i, err)
                         // Still add basic share detail
                         shareDetail := ShareDetails{
