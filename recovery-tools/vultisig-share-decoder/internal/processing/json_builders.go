@@ -209,8 +209,8 @@ func ProcessEdDSAKeyForCoinsJSON(eddsaPrivateKeyBytes []byte, eddsaPublicKeyByte
 
 // ConvertSupportedCoinsToJSON converts coin configs to JSON format
 func ConvertSupportedCoinsToJSON() GetSupportedCoinsResult {
-        ecdsaCoins := GetSupportedCoins()
-        eddsaCoins := GetEdDSACoins()
+        ecdsaCoins := GetEnhancedECDSACoins()
+        eddsaCoins := GetEnhancedEdDSACoins()
         
         var ecdsaSupportInfo []CoinSupportInfo
         for _, coin := range ecdsaCoins {
