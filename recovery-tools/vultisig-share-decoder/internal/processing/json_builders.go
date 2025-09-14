@@ -144,7 +144,7 @@ func ProcessRootKeyForCoinsJSON(rootPrivateKeyBytes []byte, rootChainCodeBytes [
 }
 
 // ProcessEdDSAKeyForCoinsJSON processes EdDSA key material and returns structured data
-func ProcessEdDSAKeyForCoinsJSON(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, coinConfigs []CoinConfigEdDSA) ([]CoinKeyInfo, error) {
+func ProcessEdDSAKeyForCoinsJSON(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, coinConfigs []EnhancedCoinConfig) ([]CoinKeyInfo, error) {
         var coinKeys []CoinKeyInfo
 
         // Process each EdDSA coin configuration using the appropriate JSON function
@@ -257,7 +257,7 @@ func DeriveAndShowKeysJSON(rootPrivateKeyHex, rootChainCodeHex string, eddsaPriv
                         return result, err
                 }
 
-                eddsaCoins := GetEdDSACoins()
+                eddsaCoins := GetEnhancedEdDSACoins()
                 eddsaKeyInfos, err := ProcessEdDSAKeyForCoinsJSON(eddsaPrivateKeyBytes, eddsaPublicKeyBytes, eddsaCoins)
                 if err != nil {
                         result.Success = false
