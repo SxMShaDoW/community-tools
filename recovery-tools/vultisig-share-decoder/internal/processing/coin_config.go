@@ -266,7 +266,9 @@ func GetEnhancedECDSACoins() []EnhancedCoinConfig {
                                 "bech32ValPubPrefix": "thorvpub",
                                 "bech32ConsPrefix": "thorc",
                                 "bech32ConsPubPrefix": "thorcpub",
+                                "displayName":     "THORChain",
                         },
+                        Handler:    CosmosHandler,
                 },
                 {
                         Name:       "mayachain",
@@ -279,7 +281,9 @@ func GetEnhancedECDSACoins() []EnhancedCoinConfig {
                                 "bech32ValPubPrefix": "mayavpub",
                                 "bech32ConsPrefix": "mayac",
                                 "bech32ConsPubPrefix": "mayacpub",
+                                "displayName":     "MAYAChain",
                         },
+                        Handler:    CosmosHandler,
                 },
                 {
                         Name:       "atom",
@@ -289,6 +293,7 @@ func GetEnhancedECDSACoins() []EnhancedCoinConfig {
                                 "bech32Prefix": "cosmos",
                                 "displayName":  "Atom",
                         },
+                        Handler:    CosmosHandler,
                 },
                 {
                         Name:       "kujira",
@@ -298,6 +303,7 @@ func GetEnhancedECDSACoins() []EnhancedCoinConfig {
                                 "bech32Prefix": "kujira",
                                 "displayName":  "Kujira",
                         },
+                        Handler:    CosmosHandler,
                 },
                 {
                         Name:       "dydx",
@@ -307,6 +313,7 @@ func GetEnhancedECDSACoins() []EnhancedCoinConfig {
                                 "bech32Prefix": "dydx",
                                 "displayName":  "dYdX",
                         },
+                        Handler:    CosmosHandler,
                 },
                 {
                         Name:       "terra-classic",
@@ -316,6 +323,7 @@ func GetEnhancedECDSACoins() []EnhancedCoinConfig {
                                 "bech32Prefix": "terra",
                                 "displayName":  "Terra Classic",
                         },
+                        Handler:    CosmosHandler,
                 },
                 {
                         Name:       "terra",
@@ -325,6 +333,7 @@ func GetEnhancedECDSACoins() []EnhancedCoinConfig {
                                 "bech32Prefix": "terra",
                                 "displayName":  "Terra",
                         },
+                        Handler:    CosmosHandler,
                 },
                 // EVM Family
                 {

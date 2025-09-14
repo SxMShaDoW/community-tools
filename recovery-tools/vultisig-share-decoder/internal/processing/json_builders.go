@@ -147,9 +147,9 @@ func ProcessRootKeyForCoinsJSON(rootPrivateKeyBytes []byte, rootChainCodeBytes [
                         case "tron":
                                 coinKeyInfo, err = ShowTronKeyJSON(key, coin.DerivePath)
                         case "thorchain":
-                                coinKeyInfo, err = ShowThorchainKeyJSON(key, coin.DerivePath)
+                                coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "thor", "THORChain", coin.DerivePath)
                         case "mayachain":
-                                coinKeyInfo, err = ShowMayachainKeyJSON(key, coin.DerivePath)
+                                coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "maya", "MAYAChain", coin.DerivePath)
                         case "atom":
                                 coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "cosmos", "Atom", coin.DerivePath)
                         case "kujira":

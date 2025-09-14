@@ -153,18 +153,23 @@ func processLitecoin(builder *CoinKeyBuilder, keyPair *ECKeyPair) (CoinKeyInfo, 
         return builder.Build(), nil
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
+// CosmosHandler unified handler for all Cosmos-family cryptocurrencies
+func CosmosHandler(extendedKey *hdkeychain.ExtendedKey, config EnhancedCoinConfig) (CoinKeyInfo, error) {
+        // Extract bech32 prefix from config params
+        bech32Prefix, exists := GetStringParam(config.Params, "bech32Prefix")
+        if !exists {
+                return CoinKeyInfo{}, fmt.Errorf("bech32Prefix not found in config params for %s", config.Name)
+        }
+        
+        // Use displayName if present, otherwise fall back to config.Name
+        coinName := config.Name
+        if displayName, exists := GetStringParam(config.Params, "displayName"); exists {
+                coinName = displayName
+        }
+        
+        // Use the existing CosmosLikeKeyHandlerJSON function
+        return CosmosLikeKeyHandlerJSON(extendedKey, bech32Prefix, coinName, config.DerivePath)
+}
 
 // ShowEthereumKeyJSON returns structured Ethereum key information
 func ShowEthereumKeyJSON(extendedPrivateKey *hdkeychain.ExtendedKey, derivePath string) (CoinKeyInfo, error) {
@@ -220,69 +225,6 @@ func CosmosLikeKeyHandlerJSON(extendedPrivateKey *hdkeychain.ExtendedKey, bech32
         return builder.Build(), nil
 }
 
-// ShowThorchainKeyJSON returns structured THORChain key information
-func ShowThorchainKeyJSON(extendedPrivateKey *hdkeychain.ExtendedKey, derivePath string) (CoinKeyInfo, error) {
-        builder := NewCoinKeyBuilder("THORChain", derivePath)
-        builder.SetExtendedPrivateKey(extendedPrivateKey.String())
-        
-        nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-        if err != nil {
-                return builder.Build(), err
-        }
-        nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-        if err != nil {
-                return builder.Build(), err
-        }
-
-        config := sdk.GetConfig()
-        config.SetBech32PrefixForAccount("thor", "thorpub")
-        config.SetBech32PrefixForValidator("thorv", "thorvpub")
-        config.SetBech32PrefixForConsensusNode("thorc", "thorcpub")
-
-        compressedPubkey := coskey.PubKey{
-                Key: nonHardenedPubKey.SerializeCompressed(),
-        }
-        addr := types.AccAddress(compressedPubkey.Address().Bytes())
-        
-        builder.SetHexPublicKey(hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-        builder.SetHexPrivateKey(hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-        builder.SetAddress(addr.String())
-        builder.SetNetworkParams("mainnet")
-        
-        return builder.Build(), nil
-}
-
-// ShowMayachainKeyJSON returns structured MAYAChain key information
-func ShowMayachainKeyJSON(extendedPrivateKey *hdkeychain.ExtendedKey, derivePath string) (CoinKeyInfo, error) {
-        builder := NewCoinKeyBuilder("MAYAChain", derivePath)
-        builder.SetExtendedPrivateKey(extendedPrivateKey.String())
-        
-        nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-        if err != nil {
-                return builder.Build(), err
-        }
-        nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-        if err != nil {
-                return builder.Build(), err
-        }
-
-        config := sdk.GetConfig()
-        config.SetBech32PrefixForAccount("maya", "mayapub")
-        config.SetBech32PrefixForValidator("mayav", "mayavpub")
-        config.SetBech32PrefixForConsensusNode("mayac", "mayacpub")
-
-        compressedPubkey := coskey.PubKey{
-                Key: nonHardenedPubKey.SerializeCompressed(),
-        }
-        addr := types.AccAddress(compressedPubkey.Address().Bytes())
-        
-        builder.SetHexPublicKey(hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-        builder.SetHexPrivateKey(hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-        builder.SetAddress(addr.String())
-        builder.SetNetworkParams("mainnet")
-        
-        return builder.Build(), nil
-}
 
 // ShowSolanaKeyFromEdDSAJSON returns structured Solana key information from raw Ed25519 keys
 func ShowSolanaKeyFromEdDSAJSON(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, derivePath string) (CoinKeyInfo, error) {
