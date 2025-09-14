@@ -255,7 +255,7 @@ func ProcessEdDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) ([]C
     privateKeyBytes := privateKey.Serialize()
 
     // Process EdDSA coins using the new JSON handlers
-    eddsaCoins := GetEdDSACoins()
+    eddsaCoins := GetEnhancedEdDSACoins()
     coinKeys := make([]CoinKeyInfo, 0, len(eddsaCoins))
 
     for _, coin := range eddsaCoins {
