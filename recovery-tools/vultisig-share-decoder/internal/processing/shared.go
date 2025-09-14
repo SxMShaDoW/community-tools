@@ -415,7 +415,7 @@ func decodeAndExtractLocalState(fileContent []byte, password string, source util
         if err != nil {
                 log.Printf("Failed to unmarshal as protobuf VaultContainer: %v", err)
                 // Fallback to direct local state parsing (GG20 format)
-                localStates, err := utils.GetLocalStateFromContent(decodedData)
+                localStates, err := GetLocalStateFromContent(decodedData)
                 if err != nil {
                         // Check if this error indicates a DKLS vault
                         if strings.Contains(err.Error(), "DKLS vault detected") {
@@ -428,7 +428,7 @@ func decodeAndExtractLocalState(fileContent []byte, password string, source util
         } else {
                 log.Printf("Successfully unmarshalled as protobuf VaultContainer")
                 // Parse using VaultContainer method (encrypted vault format)
-                localStates, err := utils.GetLocalStateFromBakContent(fileContent, password, source)
+                localStates, err := GetLocalStateFromBakContent(fileContent, password, source)
                 if err != nil {
                         // Check if this error indicates a DKLS vault
                         if strings.Contains(err.Error(), "DKLS vault detected") {
