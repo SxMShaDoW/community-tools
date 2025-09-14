@@ -168,7 +168,7 @@ func CosmosHandler(extendedKey *hdkeychain.ExtendedKey, config EnhancedCoinConfi
         }
         
         // Use the existing processCosmosLike function
-        return processCosmosLike(extendedKey, bech32Prefix, coinName, config.DerivePath)
+        return processCosmos(extendedKey, bech32Prefix, coinName, config.DerivePath)
 }
 
 // EthereumHandler returns structured Ethereum key information
@@ -193,8 +193,8 @@ func EthereumHandler(extendedKey *hdkeychain.ExtendedKey, config EnhancedCoinCon
 }
 
 
-// processCosmosLike returns structured Cosmos-like chain key information
-func processCosmosLike(extendedPrivateKey *hdkeychain.ExtendedKey, bech32PrefixAcc string, coinName, derivePath string) (CoinKeyInfo, error) {
+// processCosmosLike returns structured Cosmos chain key information
+func processCosmos(extendedPrivateKey *hdkeychain.ExtendedKey, bech32PrefixAcc string, coinName, derivePath string) (CoinKeyInfo, error) {
         builder := NewCoinKeyBuilder(coinName, derivePath)
         builder.SetExtendedPrivateKey(extendedPrivateKey.String())
 
