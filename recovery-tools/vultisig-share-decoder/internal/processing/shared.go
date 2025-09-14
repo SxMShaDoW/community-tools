@@ -17,6 +17,64 @@ import (
 )
 
 
+// decodeAndParseVaultContainer consolidates the base64 decode and VaultContainer parsing logic.
+// Returns the decoded data and parsed VaultContainer, or error if parsing fails.
+func decodeAndParseVaultContainer(fileContent []byte) ([]byte, *v1.VaultContainer, error) {
+        contentStr := strings.TrimSpace(string(fileContent))
+        
+        // Try to decode as base64 first
+        decodedData, err := base64.StdEncoding.DecodeString(contentStr)
+        if err != nil {
+                log.Printf("Content is not base64 encoded, using raw data")
+                decodedData = fileContent
+        } else {
+                log.Printf("Successfully decoded from base64")
+        }
+
+        // Try to parse as protobuf VaultContainer
+        var vaultContainer v1.VaultContainer
+        if err := proto.Unmarshal(decodedData, &vaultContainer); err != nil {
+                return decodedData, nil, err
+        }
+        
+        return decodedData, &vaultContainer, nil
+}
+
+// decodeAndExtractLocalState consolidates the file parsing logic that was duplicated across functions.
+// It handles base64 decoding, protobuf parsing, GG20/DKLS detection, and returns structured results.
+func decodeAndExtractLocalState(fileContent []byte, password string, source utils.InputSource) (map[utils.TssKeyType]crypto.LocalState, bool, error) {
+        contentStr := strings.TrimSpace(string(fileContent))
+        
+        decodedData, vaultContainer, err := decodeAndParseVaultContainer(fileContent)
+        if err != nil {
+                log.Printf("Failed to unmarshal as protobuf VaultContainer: %v", err)
+                // Fallback to direct local state parsing (GG20 format)
+                localStates, err := utils.GetLocalStateFromContent(decodedData)
+                if err != nil {
+                        // Check if this error indicates a DKLS vault
+                        if strings.Contains(err.Error(), "DKLS vault detected") {
+                                log.Printf("DKLS vault detected during content parsing")
+                                return nil, true, fmt.Errorf("DKLS vault detected: %w", err)
+                        }
+                        return nil, false, fmt.Errorf("error parsing content: %w", err)
+                }
+                return localStates, false, nil
+        } else {
+                log.Printf("Successfully unmarshalled as protobuf VaultContainer")
+                // Parse using VaultContainer method (encrypted vault format)
+                localStates, err := utils.GetLocalStateFromBakContent([]byte(contentStr), password, source)
+                if err != nil {
+                        // Check if this error indicates a DKLS vault
+                        if strings.Contains(err.Error(), "DKLS vault detected") {
+                                log.Printf("DKLS vault detected during vault container parsing")
+                                return nil, true, fmt.Errorf("DKLS vault detected: %w", err)
+                        }
+                        return nil, false, fmt.Errorf("error processing vault container: %w", err)
+                }
+                return localStates, false, nil
+        }
+}
+
 // ProcessFileContentJSON processes files and returns structured JSON data
 func ProcessFileContentJSON(fileInfos []utils.FileInfo, passwords []string, source utils.InputSource) (ProcessResult, error) {
         result := ProcessResult{
@@ -39,53 +97,22 @@ func ProcessFileContentJSON(fileInfos []utils.FileInfo, passwords []string, sour
 
         // Process each file
         for i, file := range fileInfos {
-                contentStr := strings.TrimSpace(string(file.Content))
-
-                log.Printf("Processing file %d, content starts with: %s", i, contentStr[:min(len(contentStr), 50)])
+                log.Printf("Processing file %d, content starts with: %s", i, string(file.Content)[:min(len(file.Content), 50)])
 
                 password := ""
                 if i < len(passwords) {
                         password = passwords[i]
                 }
 
-                var localStates map[utils.TssKeyType]crypto.LocalState
-                var err error
-
-                decodedData, err := base64.StdEncoding.DecodeString(contentStr)
+                localStates, isDKLS, err := decodeAndExtractLocalState(file.Content, password, source)
                 if err != nil {
-                        log.Printf("File %d is not base64 encoded, trying direct parsing", i)
-                        decodedData = file.Content
-                } else {
-                        log.Printf("File %d successfully decoded from base64", i)
-                }
-
-                var vaultContainer v1.VaultContainer
-                if err := proto.Unmarshal(decodedData, &vaultContainer); err != nil {
-                        log.Printf("Failed to unmarshal as protobuf: %v", err)
-                        localStates, err = utils.GetLocalStateFromContent(decodedData)
-                        if err != nil {
-                                // Check if this error indicates a DKLS vault
-                                if strings.Contains(err.Error(), "DKLS vault detected") {
-                                        log.Printf("File %d detected as DKLS format, skipping GG20 processing", i)
-                                        continue // Skip this file for GG20 processing
-                                }
-                                result.Success = false
-                                result.Error = fmt.Sprintf("error processing file %d: %v", i, err)
-                                return result, fmt.Errorf("error processing file %d: %w", i, err)
+                        if isDKLS {
+                                log.Printf("File %d detected as DKLS format, skipping GG20 processing", i)
+                                continue // Skip this file for GG20 processing
                         }
-                } else {
-                        log.Printf("Successfully unmarshalled as protobuf VaultContainer")
-                        localStates, err = utils.GetLocalStateFromBakContent([]byte(contentStr), password, source)
-                        if err != nil {
-                                // Check if this error indicates a DKLS vault
-                                if strings.Contains(err.Error(), "DKLS vault detected") {
-                                        log.Printf("File %d detected as DKLS format, skipping GG20 processing", i)
-                                        continue // Skip this file for GG20 processing
-                                }
-                                result.Success = false
-                                result.Error = fmt.Sprintf("error processing vault container file %d: %v", i, err)
-                                return result, fmt.Errorf("error processing vault container file %d: %w", i, err)
-                        }
+                        result.Success = false
+                        result.Error = fmt.Sprintf("error processing file %d: %v", i, err)
+                        return result, fmt.Errorf("error processing file %d: %w", i, err)
                 }
 
                 // Add share details to result
