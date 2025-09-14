@@ -97,7 +97,7 @@ func BuildRootKeyInfoFromBytes(rootPrivateKeyBytes, rootChainCodeBytes []byte) R
 }
 
 // ProcessRootKeyForCoinsJSON processes root key material and returns structured data
-func ProcessRootKeyForCoinsJSON(rootPrivateKeyBytes []byte, rootChainCodeBytes []byte, coinConfigs []CoinConfig) (RootKeyInfo, []CoinKeyInfo, error) {
+func ProcessRootKeyForCoinsJSON(rootPrivateKeyBytes []byte, rootChainCodeBytes []byte, coinConfigs []EnhancedCoinConfig) (RootKeyInfo, []CoinKeyInfo, error) {
         // Build root key info
         rootKeyInfo := BuildRootKeyInfoFromBytes(rootPrivateKeyBytes, rootChainCodeBytes)
         
@@ -118,51 +118,19 @@ func ProcessRootKeyForCoinsJSON(rootPrivateKeyBytes []byte, rootChainCodeBytes [
 
         var coinKeys []CoinKeyInfo
 
-        // Get enhanced coin configurations for more flexible handling
-        enhancedCoins := GetEnhancedECDSACoins()
-        
-        // Create a map for quick lookup of enhanced configs by name
-        enhancedConfigMap := make(map[string]EnhancedCoinConfig)
-        for _, enhancedCoin := range enhancedCoins {
-                enhancedConfigMap[enhancedCoin.Name] = enhancedCoin
-        }
-
-        // Process each coin configuration using the appropriate handler
+        // Process each enhanced coin configuration using the appropriate handler
         for _, coin := range coinConfigs {
                 key, err := GetDerivedPrivateKeys(coin.DerivePath, extendedPrivateKey)
                 if err != nil {
                         return rootKeyInfo, nil, fmt.Errorf("error deriving private key for %s: %w", coin.Name, err)
                 }
 
-                // Use enhanced config if available, otherwise fall back to legacy switch
+                // Use the enhanced configuration handler
                 var coinKeyInfo CoinKeyInfo
-                if enhancedConfig, exists := enhancedConfigMap[coin.Name]; exists && enhancedConfig.Handler != nil {
-                        // Use the enhanced configuration handler
-                        coinKeyInfo, err = enhancedConfig.Handler(key, enhancedConfig)
+                if coin.Handler != nil {
+                        coinKeyInfo, err = coin.Handler(key, coin)
                 } else {
-                        // Fall back to legacy handler switch for coins not yet migrated
-                        switch coin.Name {
-                        case "ethereum":
-                                coinKeyInfo, err = ShowEthereumKeyJSON(key, coin.DerivePath)
-                        case "tron":
-                                coinKeyInfo, err = ShowTronKeyJSON(key, coin.DerivePath)
-                        case "thorchain":
-                                coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "thor", "THORChain", coin.DerivePath)
-                        case "mayachain":
-                                coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "maya", "MAYAChain", coin.DerivePath)
-                        case "atom":
-                                coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "cosmos", "Atom", coin.DerivePath)
-                        case "kujira":
-                                coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "kujira", "Kujira", coin.DerivePath)
-                        case "dydx":
-                                coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "dydx", "dYdX", coin.DerivePath)
-                        case "terra-classic":
-                                coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "terra", "Terra Classic", coin.DerivePath)
-                        case "terra":
-                                coinKeyInfo, err = CosmosLikeKeyHandlerJSON(key, "terra", "Terra", coin.DerivePath)
-                        default:
-                                return rootKeyInfo, nil, fmt.Errorf("unsupported coin: %s", coin.Name)
-                        }
+                        return rootKeyInfo, nil, fmt.Errorf("no handler available for coin: %s", coin.Name)
                 }
 
                 if err != nil {
@@ -264,7 +232,7 @@ func DeriveAndShowKeysJSON(rootPrivateKeyHex, rootChainCodeHex string, eddsaPriv
         result.RootKeyInfo = BuildRootKeyInfoFromBytes(rootPrivateKeyBytes, rootChainCodeBytes)
 
         // Process ECDSA coins
-        ecdsaCoins := GetSupportedCoins()
+        ecdsaCoins := GetEnhancedECDSACoins()
         _, ecdsaKeyInfos, err := ProcessRootKeyForCoinsJSON(rootPrivateKeyBytes, rootChainCodeBytes, ecdsaCoins)
         if err != nil {
                 result.Success = false
