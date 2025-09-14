@@ -167,20 +167,20 @@ func CosmosHandler(extendedKey *hdkeychain.ExtendedKey, config EnhancedCoinConfi
                 coinName = displayName
         }
         
-        // Use the existing CosmosLikeKeyHandlerJSON function
-        return CosmosLikeKeyHandlerJSON(extendedKey, bech32Prefix, coinName, config.DerivePath)
+        // Use the existing processCosmosLike function
+        return processCosmosLike(extendedKey, bech32Prefix, coinName, config.DerivePath)
 }
 
-// ShowEthereumKeyJSON returns structured Ethereum key information
-func ShowEthereumKeyJSON(extendedPrivateKey *hdkeychain.ExtendedKey, derivePath string) (CoinKeyInfo, error) {
-        builder := NewCoinKeyBuilder("ethereum", derivePath)
-        builder.SetExtendedPrivateKey(extendedPrivateKey.String())
+// EthereumHandler returns structured Ethereum key information
+func EthereumHandler(extendedKey *hdkeychain.ExtendedKey, config EnhancedCoinConfig) (CoinKeyInfo, error) {
+        builder := NewCoinKeyBuilder("ethereum", config.DerivePath)
+        builder.SetExtendedPrivateKey(extendedKey.String())
         
-        nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
+        nonHardenedPubKey, err := extendedKey.ECPubKey()
         if err != nil {
                 return builder.Build(), err
         }
-        nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
+        nonHardenedPrivKey, err := extendedKey.ECPrivKey()
         if err != nil {
                 return builder.Build(), err
         }
@@ -193,8 +193,8 @@ func ShowEthereumKeyJSON(extendedPrivateKey *hdkeychain.ExtendedKey, derivePath 
 }
 
 
-// CosmosLikeKeyHandlerJSON returns structured Cosmos-like chain key information
-func CosmosLikeKeyHandlerJSON(extendedPrivateKey *hdkeychain.ExtendedKey, bech32PrefixAcc string, coinName, derivePath string) (CoinKeyInfo, error) {
+// processCosmosLike returns structured Cosmos-like chain key information
+func processCosmosLike(extendedPrivateKey *hdkeychain.ExtendedKey, bech32PrefixAcc string, coinName, derivePath string) (CoinKeyInfo, error) {
         builder := NewCoinKeyBuilder(coinName, derivePath)
         builder.SetExtendedPrivateKey(extendedPrivateKey.String())
 
@@ -226,8 +226,8 @@ func CosmosLikeKeyHandlerJSON(extendedPrivateKey *hdkeychain.ExtendedKey, bech32
 }
 
 
-// ShowSolanaKeyFromEdDSAJSON returns structured Solana key information from raw Ed25519 keys
-func ShowSolanaKeyFromEdDSAJSON(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, derivePath string) (CoinKeyInfo, error) {
+// processSolana returns structured Solana key information from raw Ed25519 keys
+func processSolana(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, derivePath string) (CoinKeyInfo, error) {
         builder := NewCoinKeyBuilder("solana", derivePath)
         
         // For Solana, the Ed25519 public key IS the address
@@ -241,8 +241,8 @@ func ShowSolanaKeyFromEdDSAJSON(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes
         return builder.Build(), nil
 }
 
-// ShowSuiKeyFromEdDSAJSON returns structured Sui key information from raw Ed25519 keys
-func ShowSuiKeyFromEdDSAJSON(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, derivePath string) (CoinKeyInfo, error) {
+// processSui returns structured Sui key information from raw Ed25519 keys
+func processSui(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, derivePath string) (CoinKeyInfo, error) {
         builder := NewCoinKeyBuilder("sui", derivePath)
         
         // For Sui, we need to create an address from the public key using Blake2b hashing
@@ -271,16 +271,16 @@ func ShowSuiKeyFromEdDSAJSON(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []
         return builder.Build(), nil
 }
 
-// ShowTronKeyJSON returns structured Tron key information
-func ShowTronKeyJSON(extendedPrivateKey *hdkeychain.ExtendedKey, derivePath string) (CoinKeyInfo, error) {
-        builder := NewCoinKeyBuilder("tron", derivePath)
-        builder.SetExtendedPrivateKey(extendedPrivateKey.String())
+// TronHandler returns structured Tron key information
+func TronHandler(extendedKey *hdkeychain.ExtendedKey, config EnhancedCoinConfig) (CoinKeyInfo, error) {
+        builder := NewCoinKeyBuilder("tron", config.DerivePath)
+        builder.SetExtendedPrivateKey(extendedKey.String())
         
-        nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
+        nonHardenedPubKey, err := extendedKey.ECPubKey()
         if err != nil {
                 return builder.Build(), err
         }
-        nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
+        nonHardenedPrivKey, err := extendedKey.ECPrivKey()
         if err != nil {
                 return builder.Build(), err
         }
@@ -324,8 +324,8 @@ func ShowTronKeyJSON(extendedPrivateKey *hdkeychain.ExtendedKey, derivePath stri
         return builder.Build(), nil
 }
 
-// ShowTonKeyFromEdDSAJSON returns structured TON key information from raw Ed25519 keys
-func ShowTonKeyFromEdDSAJSON(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, derivePath string) (CoinKeyInfo, error) {
+// processTon returns structured TON key information from raw Ed25519 keys
+func processTon(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, derivePath string) (CoinKeyInfo, error) {
         builder := NewCoinKeyBuilder("ton", derivePath)
         
         // Validate key lengths
@@ -369,16 +369,16 @@ func ShowTonKeyFromEdDSAJSON(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []
 
 // SolanaEdDSAHandler processes Solana keys using proper EdDSA cryptography
 func SolanaEdDSAHandler(privateKeyBytes, publicKeyBytes []byte, config EnhancedCoinConfig) (CoinKeyInfo, error) {
-        return ShowSolanaKeyFromEdDSAJSON(privateKeyBytes, publicKeyBytes, config.DerivePath)
+        return processSolana(privateKeyBytes, publicKeyBytes, config.DerivePath)
 }
 
 // SuiEdDSAHandler processes Sui keys using proper EdDSA cryptography
 func SuiEdDSAHandler(privateKeyBytes, publicKeyBytes []byte, config EnhancedCoinConfig) (CoinKeyInfo, error) {
-        return ShowSuiKeyFromEdDSAJSON(privateKeyBytes, publicKeyBytes, config.DerivePath)
+        return processSui(privateKeyBytes, publicKeyBytes, config.DerivePath)
 }
 
 // TonEdDSAHandler processes TON keys using proper EdDSA cryptography
 func TonEdDSAHandler(privateKeyBytes, publicKeyBytes []byte, config EnhancedCoinConfig) (CoinKeyInfo, error) {
-        return ShowTonKeyFromEdDSAJSON(privateKeyBytes, publicKeyBytes, config.DerivePath)
+        return processTon(privateKeyBytes, publicKeyBytes, config.DerivePath)
 }
 

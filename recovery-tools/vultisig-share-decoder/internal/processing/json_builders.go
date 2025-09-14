@@ -155,11 +155,11 @@ func ProcessEdDSAKeyForCoinsJSON(eddsaPrivateKeyBytes []byte, eddsaPublicKeyByte
                 // Use the appropriate JSON handler based on coin name
                 switch coin.Name {
                 case "solana":
-                        coinKeyInfo, err = ShowSolanaKeyFromEdDSAJSON(eddsaPrivateKeyBytes, eddsaPublicKeyBytes, coin.DerivePath)
+                        coinKeyInfo, err = processSolana(eddsaPrivateKeyBytes, eddsaPublicKeyBytes, coin.DerivePath)
                 case "sui":
-                        coinKeyInfo, err = ShowSuiKeyFromEdDSAJSON(eddsaPrivateKeyBytes, eddsaPublicKeyBytes, coin.DerivePath)
+                        coinKeyInfo, err = processSui(eddsaPrivateKeyBytes, eddsaPublicKeyBytes, coin.DerivePath)
                 case "ton":
-                        coinKeyInfo, err = ShowTonKeyFromEdDSAJSON(eddsaPrivateKeyBytes, eddsaPublicKeyBytes, coin.DerivePath)
+                        coinKeyInfo, err = processTon(eddsaPrivateKeyBytes, eddsaPublicKeyBytes, coin.DerivePath)
                 default:
                         return nil, fmt.Errorf("unsupported EdDSA coin: %s", coin.Name)
                 }

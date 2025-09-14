@@ -362,12 +362,3 @@ func GetCoinHandler(coinName string) (CoinHandler, bool) {
         return handler, exists
 }
 
-// EthereumHandler adapts ShowEthereumKeyJSON to CoinHandler signature
-func EthereumHandler(extendedKey *hdkeychain.ExtendedKey, config EnhancedCoinConfig) (CoinKeyInfo, error) {
-        return ShowEthereumKeyJSON(extendedKey, config.DerivePath)
-}
-
-// TronHandler adapts ShowTronKeyJSON to CoinHandler signature  
-func TronHandler(extendedKey *hdkeychain.ExtendedKey, config EnhancedCoinConfig) (CoinKeyInfo, error) {
-        return ShowTronKeyJSON(extendedKey, config.DerivePath)
-}
