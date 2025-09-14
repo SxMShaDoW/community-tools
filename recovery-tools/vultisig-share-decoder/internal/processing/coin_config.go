@@ -344,6 +344,7 @@ func GetEnhancedECDSACoins() []EnhancedCoinConfig {
                                 "chainId": 1, // Mainnet
                                 "network": "mainnet",
                         },
+                        Handler:    EthereumHandler,
                 },
                 {
                         Name:       "tron",
@@ -353,6 +354,7 @@ func GetEnhancedECDSACoins() []EnhancedCoinConfig {
                                 "network": "mainnet",
                                 "addressPrefix": "0x41", // Tron mainnet version byte
                         },
+                        Handler:    TronHandler,
                 },
         }
 }
@@ -417,4 +419,36 @@ func GetCoinsByFamily(family CoinFamily) []EnhancedCoinConfig {
 // GetAllEnhancedCoins returns all supported cryptocurrencies with enhanced configuration
 func GetAllEnhancedCoins() []EnhancedCoinConfig {
         return append(GetEnhancedECDSACoins(), GetEnhancedEdDSACoins()...)
+}
+
+// CoinHandlerRegistry maps coin names to their respective handlers
+var CoinHandlerRegistry map[string]CoinHandler
+
+// InitializeCoinHandlerRegistry sets up the registry mapping coin names to handlers
+func InitializeCoinHandlerRegistry() {
+        CoinHandlerRegistry = make(map[string]CoinHandler)
+        
+        // Populate registry from enhanced coin configurations
+        enhancedCoins := GetEnhancedECDSACoins()
+        for _, coin := range enhancedCoins {
+                if coin.Handler != nil {
+                        CoinHandlerRegistry[coin.Name] = coin.Handler
+                }
+        }
+}
+
+// GetCoinHandler retrieves a handler for the given coin name from the registry
+func GetCoinHandler(coinName string) (CoinHandler, bool) {
+        handler, exists := CoinHandlerRegistry[coinName]
+        return handler, exists
+}
+
+// EthereumHandler adapts ShowEthereumKeyJSON to CoinHandler signature
+func EthereumHandler(extendedKey *hdkeychain.ExtendedKey, config EnhancedCoinConfig) (CoinKeyInfo, error) {
+        return ShowEthereumKeyJSON(extendedKey, config.DerivePath)
+}
+
+// TronHandler adapts ShowTronKeyJSON to CoinHandler signature  
+func TronHandler(extendedKey *hdkeychain.ExtendedKey, config EnhancedCoinConfig) (CoinKeyInfo, error) {
+        return ShowTronKeyJSON(extendedKey, config.DerivePath)
 }

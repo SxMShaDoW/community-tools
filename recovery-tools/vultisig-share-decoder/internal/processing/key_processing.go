@@ -99,54 +99,32 @@ func ProcessECDSAKeysJSON(threshold int, allSecrets []utils.TempLocalState) (*Ro
         ExtendedPrivKey: extendedPrivateKey.String(),
     }
 
-    // Process all supported coins using the new JSON handlers
-    supportedCoins := GetSupportedCoins()
-    coinKeys := make([]CoinKeyInfo, 0, len(supportedCoins))
+    // Initialize the coin handler registry
+    InitializeCoinHandlerRegistry()
+    
+    // Process all supported coins using the registry pattern
+    enhancedCoins := GetEnhancedECDSACoins()
+    coinKeys := make([]CoinKeyInfo, 0, len(enhancedCoins))
 
-    for _, coin := range supportedCoins {
-        log.Printf("Processing %s key derivation", coin.Name)
-        key, err := GetDerivedPrivateKeys(coin.DerivePath, extendedPrivateKey)
+    for _, coinConfig := range enhancedCoins {
+        log.Printf("Processing %s key derivation", coinConfig.Name)
+        key, err := GetDerivedPrivateKeys(coinConfig.DerivePath, extendedPrivateKey)
         if err != nil {
-            log.Printf("Error deriving private key for %s: %v", coin.Name, err)
+            log.Printf("Error deriving private key for %s: %v", coinConfig.Name, err)
             continue
         }
 
-        // Use the appropriate JSON handler based on coin name
-        var coinInfo CoinKeyInfo
-        switch coin.Name {
-        case "ethereum":
-            coinInfo, err = ShowEthereumKeyJSON(key, coin.DerivePath)
-        case "bitcoin":
-            coinInfo, err = ShowBitcoinKeyJSON(key, coin.DerivePath)
-        case "bitcoinCash":
-            coinInfo, err = ShowBitcoinCashKeyJSON(key, coin.DerivePath)
-        case "dogecoin":
-            coinInfo, err = ShowDogecoinKeyJSON(key, coin.DerivePath)
-        case "litecoin":
-            coinInfo, err = ShowLitecoinKeyJSON(key, coin.DerivePath)
-        case "thorchain":
-            coinInfo, err = ShowThorchainKeyJSON(key, coin.DerivePath)
-        case "mayachain":
-            coinInfo, err = ShowMayachainKeyJSON(key, coin.DerivePath)
-        case "tron":
-            coinInfo, err = ShowTronKeyJSON(key, coin.DerivePath)
-        case "atom":
-            coinInfo, err = CosmosLikeKeyHandlerJSON(key, "cosmos", "Atom", coin.DerivePath)
-        case "kujira":
-            coinInfo, err = CosmosLikeKeyHandlerJSON(key, "kujira", "Kujira", coin.DerivePath)
-        case "dydx":
-            coinInfo, err = CosmosLikeKeyHandlerJSON(key, "dydx", "dYdX", coin.DerivePath)
-        case "terra-classic":
-            coinInfo, err = CosmosLikeKeyHandlerJSON(key, "terra", "Terra Classic", coin.DerivePath)
-        case "terra":
-            coinInfo, err = CosmosLikeKeyHandlerJSON(key, "terra", "Terra", coin.DerivePath)
-        default:
-            log.Printf("Unsupported coin: %s", coin.Name)
+        // Get handler from registry
+        handler, exists := GetCoinHandler(coinConfig.Name)
+        if !exists {
+            log.Printf("No handler found for coin: %s", coinConfig.Name)
             continue
         }
         
+        // Use the handler from the registry
+        coinInfo, err := handler(key, coinConfig)
         if err != nil {
-            log.Printf("Error processing %s key: %v", coin.Name, err)
+            log.Printf("Error processing %s key: %v", coinConfig.Name, err)
             continue
         }
 
